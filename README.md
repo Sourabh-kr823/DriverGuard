@@ -212,9 +212,10 @@ python finetune_india.py --epochs 75 --batch 4 --device 0
 
 | Name | GitHub | Role |
 |------|--------|------|
-| Sourabh | [@K4s7](https://github.com/K4s7) | Lead — DMS pipeline, dashboard, risk fusion |
-| *(teammate)* | *@username* | *(role)* |
-| *(teammate)* | *@username* | *(role)* |
+| Sourabh Kumar | [@Sourabh-kr823] (https://github.com/Sourabh-kr823) | Lead - Road detection pipeline, YOLOv8 model training |
+| Vaibhav Gupta | [@vaibhavgupta4621] (https://github.com/vaibhavgupta4621) | DMS pipeline, EAR/MAR computation |
+| Saumya Raj | [@saumyaraj1925] (https://github.com/saumyaraj1925) | Live web dashboard , Frontend Handling |
+| Sumit Kumar | [@sumitkumar93041] (https://github.com/sumitkumar93041) | Backend and Risk fusion Engine development |
 
 ---
 
