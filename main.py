@@ -159,7 +159,8 @@ def dms_thread(dms: DriverMonitor, cam: CameraCapture,
 
 def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
                 alert: AlertManager, db: DatabaseManager,
-                show_preview: bool, stop: threading.Event):
+                show_preview: bool, stop: threading.Event,
+                writer: cv2.VideoWriter = None):
     """Road Damage Detection loop."""
     logger.info("[Road] Pipeline thread started")
     while not stop.is_set():
@@ -167,6 +168,10 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
         if frame is None:
             time.sleep(0.033)
             continue
+
+        # Save raw frame to recording if enabled
+        if writer is not None:
+            writer.write(frame)
 
         gps = alert.state
         dets = detector.process(frame, lat=gps.lat, lon=gps.lon)
@@ -222,12 +227,32 @@ def main():
                         help="Show OpenCV preview windows")
     parser.add_argument("--no-web",   action="store_true",
                         help="Skip launching the web dashboard")
+    parser.add_argument("--record",   action="store_true",
+                        help="Save road camera footage to data/recordings/ for training data")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     if args.simulate:
         cfg["gps"]["simulation"] = True
         logger.info("Simulation mode enabled")
+
+    # ── Video recording setup ─────────────────────────────────────────────────
+    road_writer = None
+    if args.record:
+        from datetime import datetime
+        import os
+        rec_dir = Path("data/recordings")
+        rec_dir.mkdir(parents=True, exist_ok=True)
+        timestamp  = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        rec_path   = str(rec_dir / f"road_{timestamp}.mp4")
+        road_cfg   = cfg["cameras"]["road"]
+        road_writer = cv2.VideoWriter(
+            rec_path,
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            road_cfg.get("fps", 30),
+            (road_cfg.get("width", 640), road_cfg.get("height", 480)),
+        )
+        logger.info(f"[Record] Saving road footage → {rec_path}")
 
     # ── Setup logger ──────────────────────────────────────────────────────────
     logger.remove()
@@ -292,7 +317,7 @@ def main():
             args=(dms, dms_cam, alert, db, args.preview, stop),
             daemon=True, name="DMSPipeline"),
         threading.Thread(target=road_thread,
-            args=(road, road_cam, alert, db, args.preview, stop),
+            args=(road, road_cam, alert, db, args.preview, stop, road_writer),
             daemon=True, name="RoadPipeline"),
         threading.Thread(target=alert_sync_thread,
             args=(alert, dms, road, gps, stop),
@@ -346,6 +371,9 @@ def main():
         stop.set()
 
     logger.info("Stopping modules …")
+    if road_writer is not None:
+        road_writer.release()
+        logger.info("[Record] Road footage saved ✓")
     dms_cam.stop()
     road_cam.stop()
     gps.stop()

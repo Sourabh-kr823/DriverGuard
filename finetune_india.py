@@ -116,7 +116,12 @@ def verify():
 # ─── Step 3: Fine-tune ────────────────────────────────────────────────────────
 
 def finetune(epochs: int, batch: int, device: str):
+    import os
     from ultralytics import YOLO
+
+    # Fix OMP duplicate runtime warning (libomp.dll vs libiomp5md.dll conflict on Windows)
+    # Without this, the process may crash immediately after training starts
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
     # Safety backup — so you can roll back to the old model if needed
     backup = BASE_MODEL.with_suffix(".backup.pt")
@@ -141,7 +146,12 @@ def finetune(epochs: int, batch: int, device: str):
         # Low LR because we're refining, not learning from scratch.
         # The 6 previous runs in training_output all used default LR 0.01
         # which effectively restarted learning every time.
-        lr0           = 0.0005,
+        # IMPORTANT: must set optimizer='SGD' explicitly.
+        # When optimizer='auto' (default), YOLO silently ignores lr0 and uses
+        # its own LR (0.01). Confirmed from log: "ignoring lr0=0.0005 ... MuSGD(lr=0.01)"
+        # Explicitly setting SGD forces our low LR to be respected.
+        optimizer     = "SGD",
+        lr0           = 0.0005,   # low LR — refining, not learning from scratch
         lrf           = 0.01,
 
         # Freeze the first 10 backbone layers.

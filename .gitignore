@@ -1,12 +1,30 @@
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
+
+# Environment
 .env
+
+# Model files — too large for git (share manually with team)
+*.pt
+*.pth
+*.dat
 *.backup.pt
+
+# Database and logs — session data, not source code
 data/logs/*.db
 data/logs/*.log
+
+# Training artifacts
 data/india_finetune/
-models/*.pt
-models/*.dat
+data/recordings/
+runs/
+
+# OS
 Thumbs.db
-*.zip 
+.DS_Store
+
+# Archives
+*.zip
+*.rar
