@@ -14,20 +14,11 @@ Your target classes:
 
 Usage
 ─────
-    python merge_datasets.py
-
-Edit the DATASET_CONFIGS section below to point to your
-downloaded dataset folders and define the class remapping.
-
-What it does
-────────────
-    1. Reads each dataset's images + labels
-    2. Remaps class IDs in label files
-    3. Copies images + remapped labels to D:/We4/train/
-    4. Skips duplicates (checks filename)
-    5. Prints a summary of what was added
+    python merge_datasets.py --verify   # check mappings first
+    python merge_datasets.py            # run full merge
 """
 
+import argparse
 import shutil
 import os
 from pathlib import Path
@@ -37,87 +28,79 @@ TRAIN_IMAGES = Path("D:/We4/train/images")
 TRAIN_LABELS = Path("D:/We4/train/labels")
 
 # ─── Dataset configurations ──────────────────────────────────────────────────
-# For each dataset, define:
-#   "path"    : root folder of downloaded dataset
-#   "remap"   : {original_class_id → your_class_id}
-#               Use -1 to skip/discard a class
-#
-# HOW TO FILL IN "remap":
-#   Open the dataset's data.yaml and check "names" list.
-#   The index in the list = the class ID in label files.
-#   Map each index to your target class ID (0-4) or -1 to skip.
-#
-# Example:
-#   If dataset yaml says: names: [pothole, speed_breaker, crack]
-#   Then: {0: 0, 1: -1, 2: 1}
-#   = pothole(0)→your pothole(0), speed_breaker(1)→skip, crack(2)→crack_long(1)
+# PATHS FIXED — pointing to where check_datasets.py extracted them
+# DATASET 3 FIXED — uses labels-YOLO/ instead of labels/ (confirmed from output)
 
 DATASET_CONFIGS = [
 
     # ── Dataset 1: Indian Roads Dataset ──────────────────────────────────────
-    # kaggle.com/datasets/mitangshu11/indian-roads-dataset
-    # Classes: pothole, speed_breaker, unpaved_road (check yaml to confirm order)
+    # Classes: pothole(0), speed_breaker(1), unpaved_road(2)
     {
-        "name"  : "Indian Roads Dataset",
-        "path"  : Path("D:/Downloads/indian-roads-dataset"),  # ← change this path
+        "name"      : "Indian Roads Dataset",
+        "path"      : Path("D:/We4/datasets/indian_road/Dataset3Class"),  # FIXED PATH
         "remap" : {
-            0: 0,   # pothole → pothole
-            1: -1,  # speed_breaker → skip (not in your classes)
-            2: -1,  # unpaved_road → skip
-        },
-        # Folder structure inside the dataset:
-        # Set to "" if images are directly in path/images/
-        # Set to "train" if images are in path/train/images/
-        "split" : "",
+                0: -1,   # speed_breaker → skip
+                1: 0,    # pothole → pothole ✓
+                2: -1,   # unpaved_road → skip
+            },
+        "split"     : "",       # images at path/images/
+        "label_dir" : "",
     },
 
-    # ── Dataset 2: Potholes Detection YOLOv8 ─────────────────────────────────
-    # kaggle.com/datasets/anggadwisunarto/potholes-detection-yolov8
-    # Classes: pothole only (nc=1)
+    # ── Dataset 2: Potholes YOLOv8 Dataset ───────────────────────────────────
+    # Classes: pothole(0) only — nc=1 confirmed
     {
-        "name"  : "Potholes YOLOv8 Dataset",
-        "path"  : Path("D:/Downloads/potholes-detection-yolov8"),  # ← change path
-        "remap" : {
-            0: 0,   # pothole → pothole
+        "name"      : "Potholes YOLOv8 Dataset",
+        "path"      : Path("D:/We4/datasets/yv8"),  # FIXED PATH
+        "remap"     : {
+            0: 0,    # pothole → pothole ✓
         },
-        "split" : "train",  # images are in path/train/images/
+        "split"     : "train",  # images at path/train/images/
+        "label_dir" : "labels",
     },
 
     # ── Dataset 3: Potholes + Cracks + Manholes ───────────────────────────────
-    # kaggle.com/datasets/lorenzoarcioni/road-damage-dataset-potholes-cracks-and-manholes
-    # Classes: pothole, crack, maintenance_hole (check yaml to confirm)
+    # Classes confirmed from COCO json:
+    #   ID 0 = pothole, ID 1 = crack, ID 2 = manhole
+    # Labels are in labels-YOLO/ (NOT labels/) — confirmed from output
     {
-        "name"  : "Potholes+Cracks+Manholes Dataset",
-        "path"  : Path("D:/Downloads/road-damage-dataset-potholes-cracks-and-manholes"),  # ← change path
-        "remap" : {
-            0: 0,   # pothole → pothole
-            1: 1,   # crack → crack_longitudinal
-            2: -1,  # maintenance_hole → skip
+        "name"      : "Potholes+Cracks+Manholes",
+        "path"      : Path("D:/We4/datasets/potholes_and_manhole"),  # FIXED PATH
+        "remap"     : {
+            0: 0,    # pothole → pothole ✓
+            1: 1,    # crack   → crack_longitudinal ✓
+            2: -1,   # manhole → skip
         },
-        "split" : "",
+        "split"     : "data",        # images at path/data/images/
+        "label_dir" : "labels-YOLO", # FIXED — use labels-YOLO not labels
     },
 ]
 
 
 # ─── Merge logic ─────────────────────────────────────────────────────────────
 
-def find_images_and_labels(dataset_path: Path, split: str):
+def find_images_and_labels(dataset_path: Path, split: str, label_dir: str):
     """Find image and label directories inside dataset folder."""
-    if split:
-        img_dir = dataset_path / split / "images"
-        lbl_dir = dataset_path / split / "labels"
+
+    # Build base path
+    base = dataset_path / split if split else dataset_path
+
+    # Image directory
+    img_dir = base / "images"
+    if not img_dir.exists():
+        img_dir = base  # images directly in base (flat structure)
+
+    # Label directory
+    if label_dir == "":
+        # Flat structure — labels are in same folder as images
+        lbl_dir = img_dir
     else:
-        img_dir = dataset_path / "images"
-        lbl_dir = dataset_path / "labels"
-
-    # Fallback — try without subdirectory
-    if not img_dir.exists():
-        img_dir = dataset_path / "images"
-        lbl_dir = dataset_path / "labels"
+        lbl_dir = base / label_dir
+        if not lbl_dir.exists():
+            lbl_dir = base / "labels"  # fallback
 
     if not img_dir.exists():
-        print(f"   ✗ Images folder not found at: {img_dir}")
-        print(f"     Check the 'path' and 'split' settings for this dataset")
+        print(f"   ✗ Images not found at: {img_dir}")
         return None, None
 
     return img_dir, lbl_dir
@@ -126,8 +109,7 @@ def find_images_and_labels(dataset_path: Path, split: str):
 def remap_label_file(src_label: Path, remap: dict) -> list:
     """
     Read a YOLO label file and remap class IDs.
-    Returns list of remapped lines (empty lines filtered out).
-    Lines with class ID mapped to -1 are discarded.
+    Returns remapped lines. Lines with class -1 are discarded.
     """
     if not src_label.exists():
         return []
@@ -141,134 +123,158 @@ def remap_label_file(src_label: Path, remap: dict) -> list:
             parts = line.split()
             if len(parts) < 5:
                 continue
-            orig_cls = int(parts[0])
-            new_cls  = remap.get(orig_cls, -1)
+            try:
+                orig_cls = int(parts[0])
+            except ValueError:
+                continue
+            new_cls = remap.get(orig_cls, -1)
             if new_cls == -1:
-                continue   # skip this annotation
+                continue
             parts[0] = str(new_cls)
             remapped.append(" ".join(parts))
     return remapped
 
 
+def verify_dataset(config: dict):
+    """Print class ID distribution to confirm remapping is correct."""
+    path      = config["path"]
+    split     = config["split"]
+    label_dir = config["label_dir"]
+    remap     = config["remap"]
+
+    if not path.exists():
+        print(f"   ✗ Not found: {path}")
+        return
+
+    base = path / split if split else path
+    if label_dir == "":
+        lbl = base  # flat structure
+    else:
+        lbl = base / label_dir
+        if not lbl.exists():
+            lbl = base / "labels"
+
+    class_counts = {}
+    files = list(lbl.rglob("*.txt"))[:200]
+    for f in files:
+        try:
+            with open(f) as fp:
+                for line in fp:
+                    parts = line.strip().split()
+                    if parts and parts[0].isdigit():
+                        c = int(parts[0])
+                        class_counts[c] = class_counts.get(c, 0) + 1
+        except Exception:
+            pass
+
+    print(f"   Labels dir: {lbl}")
+    print(f"   Class mapping:")
+    TARGET = {0:"pothole",1:"crack_longitudinal",2:"crack_transverse",3:"rutting",4:"repair"}
+    for cls_id, count in sorted(class_counts.items()):
+        mapped = remap.get(cls_id, -1)
+        mapped_name = TARGET.get(mapped, "SKIP") if mapped != -1 else "SKIP"
+        arrow = "✓" if mapped != -1 else "✗ skip"
+        print(f"     Class {cls_id}: {count:5d} annotations → {mapped_name} {arrow}")
+
+
 def merge_dataset(config: dict, existing_images: set):
-    """Process one dataset config and copy files to training folder."""
-    name  = config["name"]
-    path  = config["path"]
-    remap = config["remap"]
-    split = config["split"]
+    """Copy images + remapped labels to training folder."""
+    name      = config["name"]
+    path      = config["path"]
+    remap     = config["remap"]
+    split     = config["split"]
+    label_dir = config["label_dir"]
 
     print(f"\n── {name} ──────────────────────────────────")
 
     if not path.exists():
-        print(f"   ✗ Dataset folder not found: {path}")
-        print(f"     Update the 'path' in DATASET_CONFIGS and re-run")
+        print(f"   ✗ Folder not found: {path}")
         return 0, 0
 
-    img_dir, lbl_dir = find_images_and_labels(path, split)
+    img_dir, lbl_dir = find_images_and_labels(path, split, label_dir)
     if img_dir is None:
         return 0, 0
 
-    # Count existing images to avoid duplicates
-    images = list(img_dir.glob("*.jpg")) + list(img_dir.glob("*.png")) + \
+    images = list(img_dir.glob("*.jpg")) + \
+             list(img_dir.glob("*.png")) + \
              list(img_dir.glob("*.jpeg"))
-    print(f"   Found {len(images)} images")
+    print(f"   Images found : {len(images)}")
+    print(f"   Labels dir   : {lbl_dir}")
 
     copied = skipped = empty = 0
 
     for img_path in images:
         stem = img_path.stem
 
-        # Skip if already in training set (by filename)
         if stem in existing_images:
             skipped += 1
             continue
 
-        # Find corresponding label
-        lbl_path = lbl_dir / (stem + ".txt") if lbl_dir and lbl_dir.exists() \
-                   else Path("__nonexistent__")
+        lbl_path = lbl_dir / (stem + ".txt") \
+                   if lbl_dir and lbl_dir.exists() \
+                   else Path("__none__")
 
-        # Remap label
         remapped_lines = remap_label_file(lbl_path, remap)
 
-        # Skip images with no valid annotations after remapping
         if not remapped_lines:
             empty += 1
             continue
 
-        # Copy image
         dst_img = TRAIN_IMAGES / img_path.name
         if not dst_img.exists():
             shutil.copy2(img_path, dst_img)
 
-        # Write remapped label
         dst_lbl = TRAIN_LABELS / (stem + ".txt")
         dst_lbl.write_text("\n".join(remapped_lines))
 
         existing_images.add(stem)
         copied += 1
 
-    print(f"   Added  : {copied} images with labels")
-    print(f"   Skipped: {skipped} duplicates")
-    print(f"   Dropped: {empty} (no valid annotations after remapping)")
+    print(f"   Added   : {copied}")
+    print(f"   Skipped : {skipped} duplicates")
+    print(f"   Dropped : {empty} (no valid annotations after remapping)")
     return copied, skipped
-
-
-def check_yaml(config: dict):
-    """Print dataset yaml so user can verify class order."""
-    path  = config["path"]
-    name  = config["name"]
-    split = config["split"]
-
-    if not path.exists():
-        return
-
-    # Look for yaml files
-    yamls = list(path.glob("*.yaml")) + list(path.glob("*.yml"))
-    if yamls:
-        print(f"\n   {name} — class structure:")
-        with open(yamls[0]) as f:
-            for line in f:
-                if "names" in line or "nc" in line:
-                    print(f"     {line.strip()}")
-    else:
-        print(f"\n   {name} — no yaml found, check folder manually")
 
 
 # ─── Entry ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("\n── DriverGuard Dataset Merger ────────────────────────────────")
-    print(f"   Target train images : {TRAIN_IMAGES}")
-    print(f"   Target train labels : {TRAIN_LABELS}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verify", action="store_true",
+                        help="Check class mappings only — no files copied")
+    args = parser.parse_args()
 
-    # Verify target folders exist
+    print("\n── DriverGuard Dataset Merger ────────────────────────────────")
+    print(f"   Target: {TRAIN_IMAGES}")
+
+    if args.verify:
+        print("\n── VERIFY MODE (no files copied) ──────────────────────────────")
+        for cfg in DATASET_CONFIGS:
+            print(f"\n  {cfg['name']}:")
+            verify_dataset(cfg)
+        print("\n   If mappings look correct → python merge_datasets.py")
+        print("   If something looks wrong → tell me and I'll fix the remap\n")
+        exit(0)
+
+    # ── Full merge ────────────────────────────────────────────────────────────
     if not TRAIN_IMAGES.exists():
-        print(f"\n✗  Training images folder not found: {TRAIN_IMAGES}")
-        print("   Make sure D:/We4/train/images/ exists")
+        print(f"\n✗  Not found: {TRAIN_IMAGES}")
         exit(1)
 
     TRAIN_LABELS.mkdir(parents=True, exist_ok=True)
 
-    # Get existing image stems to avoid duplicates
     print("\n   Scanning existing dataset...")
     existing = {p.stem for p in TRAIN_IMAGES.glob("*.*")}
     print(f"   Existing images: {len(existing)}")
 
-    # First — print yaml info so user can verify class mapping
-    print("\n── Verifying dataset class structures ─────────────────────────")
-    for config in DATASET_CONFIGS:
-        check_yaml(config)
-
-    print("\n── Merging datasets ───────────────────────────────────────────")
+    print("\n── Merging ────────────────────────────────────────────────────")
     total_added = 0
-    for config in DATASET_CONFIGS:
-        added, _ = merge_dataset(config, existing)
+    for cfg in DATASET_CONFIGS:
+        added, _ = merge_dataset(cfg, existing)
         total_added += added
 
-    # Final count
     final_count = len(list(TRAIN_IMAGES.glob("*.*")))
     print(f"\n── Summary ────────────────────────────────────────────────────")
-    print(f"   Images added this run : {total_added}")
-    print(f"   Total training images : {final_count}")
-    print(f"\n   Next step: run python finetune_india.py")
-    print("──────────────────────────────────────────────────────────────\n")
+    print(f"   Added this run  : {total_added}")
+    print(f"   Total images    : {final_count}")
+    print(f"\n   Next → python finetune_india.py\n")
