@@ -1,8 +1,12 @@
-
 # 🚗 DriverGuard v2.1
 
-> **Real-time Vehicle Safety Monitor** — Drowsiness Detection + Road Damage Detection on a unified live dashboard.
+> **Real-Time Vehicle Safety Monitor** — Drowsiness Detection + Road Damage Detection on a unified live dashboard.
 
+![Python](https://img.shields.io/badge/Python-3.10-blue?logo=python)
+![YOLOv8](https://img.shields.io/badge/YOLOv8-nano-purple)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-0.10-green?logo=google)
+![Flask](https://img.shields.io/badge/Flask-Socket.IO-black?logo=flask)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20RPi5-orange)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen)
 
 ---
@@ -90,6 +94,9 @@ DriverGuard/
 ├── main.py                    # Entry point
 ├── config.yaml                # All thresholds and settings
 ├── finetune_india.py          # Road model fine-tuning script
+├── merge_datasets.py          # Dataset merger with class remapping
+├── test_images.py             # Demo tool for image/video testing
+├── requirements.txt           # Python dependencies
 │
 ├── modules/
 │   ├── dms/
@@ -97,22 +104,23 @@ DriverGuard/
 │   │   ├── ear_mar.py         # EAR + MAR computation (6-pt formula)
 │   │   └── head_pose.py       # Yaw/pitch estimation
 │   ├── road/
-│   │   └── road_detector.py   # YOLOv8 road damage pipeline
+│   │   └── detector.py        # YOLOv8 road damage pipeline
 │   ├── gps/
-│   │   └── gps_handler.py     # NEO-6M serial + simulation
-│   ├── risk/
-│   │   └── risk_fusion.py     # Weighted risk scoring
-│   └── db/
+│   │   └── gps_reader.py      # NEO-6M serial + simulation
+│   ├── alert/
+│   │   └── alert_manager.py   # Risk fusion + alert logic
+│   └── database/
 │       └── db_manager.py      # SQLite WAL logger
 │
 ├── dashboard/
 │   └── app.py                 # Flask + Socket.IO dashboard
 │
 ├── models/
-│   └── yolov8n_rdd_india.pt   # Road damage model (not in git — too large)
+│   ├── yolov8n_rdd_india.pt   # Road damage model — included in repo (6.2MB)
+│   └── README.md              # Model setup instructions
 │
 └── data/
-    └── logs/                  # SQLite DB + session logs
+    └── logs/                  # SQLite DB + session logs (not tracked)
 ```
 
 ---
@@ -128,7 +136,7 @@ DriverGuard/
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/K4s7/DriverGuard.git
+git clone https://github.com/Sourabh-kr823/DriverGuard.git
 cd DriverGuard
 
 # 2. Create conda environment
@@ -139,13 +147,14 @@ conda activate driverguard
 pip install -r requirements.txt
 ```
 
-### Download large files separately
-These are too large for git — get them from the team:
+### Download large file separately
+The YOLOv8 model is **already included** in the repo. Only the dlib model needs manual download:
 
-| File | Source |
-|------|--------|
-| `models/shape_predictor_68_face_landmarks.dat` | [dlib.net](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2) |
-| `models/yolov8n_rdd_india.pt` | Get from team (trained weights) |
+| File | Size | Download |
+|------|------|----------|
+| `models/shape_predictor_68_face_landmarks.dat` | ~99MB | [dlib.net](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2) |
+
+> **Note:** The system works without the dlib file when using `backend: mediapipe` in `config.yaml` (default setting).
 
 ---
 
@@ -158,8 +167,11 @@ cd DriverGuard
 # Full run with GPS simulation + preview windows
 python main.py --simulate --preview
 
-# Without preview windows (headless / Pi deployment)
-python main.py --simulate
+# Record road camera footage during a session
+python main.py --simulate --preview --record
+
+# Test detection on images or video
+python test_images.py --source path/to/image_or_video
 ```
 
 Open `http://localhost:5000` in your browser for the live dashboard.
@@ -178,9 +190,9 @@ cameras:
 | Detail | Value |
 |--------|-------|
 | Architecture | YOLOv8-nano |
-| Dataset | RDD2022 (multi-country via Roboflow) |
+| Dataset | RDD2022 (multi-country via Roboflow, 22,700+ images) |
 | Current mAP50 | 58.8% |
-| Classes | pothole, crack_longitudinal, crack_transverse, rutting, repair |
+| Classes | pothole, crack\_longitudinal, crack\_transverse, rutting, repair |
 | Input size | 640×640 |
 
 ### Fine-tuning on India road footage
@@ -212,10 +224,10 @@ python finetune_india.py --epochs 75 --batch 4 --device 0
 
 | Name | GitHub | Role |
 |------|--------|------|
-| Sourabh Kumar | [@Sourabh-kr823] (https://github.com/Sourabh-kr823) | Lead - Road detection pipeline, YOLOv8 model training |
-| Vaibhav Gupta | [@vaibhavgupta4621] (https://github.com/vaibhavgupta4621) | DMS pipeline, EAR/MAR computation |
-| Saumya Raj | [@saumyaraj1925] (https://github.com/saumyaraj1925) | Live web dashboard , Frontend Handling |
-| Sumit Kumar | [@sumitkumar93041] (https://github.com/sumitkumar93041) | Backend and Risk fusion Engine development |
+| Sourabh Kumar | [@Sourabh-kr823](https://github.com/Sourabh-kr823) | Lead — Road detection pipeline, YOLOv8 model training |
+| Vaibhav Gupta | [@vaibhavgupta4621](https://github.com/vaibhavgupta4621) | DMS pipeline, EAR/MAR computation |
+| Saumya Raj | [@saumyaraj1925](https://github.com/saumyaraj1925) | Live web dashboard, Frontend handling |
+| Sumit Kumar | [@sumitkumar93041](https://github.com/sumitkumar93041) | Backend and Risk Fusion Engine |
 
 ---
 
@@ -223,7 +235,7 @@ python finetune_india.py --epochs 75 --batch 4 --device 0
 
 ```
 Phase I  ✅ Complete    → Laptop prototype, dual-camera, live dashboard
-Phase II 🔄 In Progress → Raspberry Pi 5 deployment, hardware integration  
+Phase II 🔄 In Progress → Raspberry Pi 5 deployment, hardware integration
 Phase III 📋 Planned    → Cloud sync, fleet management, mobile app
 ```
 
@@ -231,9 +243,5 @@ Phase III 📋 Planned    → Cloud sync, fleet management, mobile app
 
 ## 📄 License
 
-This project is developed as part of academic coursework.  
+This project is developed as part of academic coursework.
 © 2026 DriverGuard Team. All rights reserved.
-=======
-# DriverGuard
-Vehicle Safety Monitor - Driver Monitoring System + Road Damage Detection
->>>>>>> 7e69633f207fa4210e9bb22afe6f0236d92b10a4
