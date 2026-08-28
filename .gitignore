@@ -6,15 +6,21 @@ __pycache__/
 # Environment
 .env
 
-# Model files — too large for git (share manually with team)
-*.pt
-*.pth
-*.dat
-*.backup.pt
+# Model files
+models/*.dat
+models/*.backup.pt
+models/yolov8n.pt
+yolov8n.pt
+yolo26n.pt
 
-# Database and logs — session data, not source code
+# Database and logs
 data/logs/*.db
 data/logs/*.log
+
+# Video files
+*.mp4
+*.avi
+*.mov
 
 # Training artifacts
 data/india_finetune/
@@ -27,4 +33,4 @@ Thumbs.db
 
 # Archives
 *.zip
-*.rartest 
+*.rar
