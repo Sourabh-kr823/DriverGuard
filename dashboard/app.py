@@ -32,68 +32,77 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <style>
-:root{--bg:#07090f;--bg2:#0c1018;--bg3:#111824;--border:#1c2a3a;
-  --text:#c4d4e4;--text2:#6a8aaa;--green:#00e5a0;--amber:#f59e0b;
-  --red:#ef4444;--blue:#3b82f6;--font-mono:'Courier New',monospace}
+:root{
+  --bg:#f0f4f8;--bg2:#ffffff;--bg3:#f8fafc;--border:#e2e8f0;
+  --text:#1e293b;--text2:#64748b;
+  --green:#059669;--amber:#d97706;--red:#dc2626;--blue:#2563eb;
+  --teal:#0891b2;--indigo:#4f46e5;
+  --green-l:#d1fae5;--amber-l:#fef3c7;--red-l:#fee2e2;--blue-l:#dbeafe;
+  --font-mono:'Courier New',monospace}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:12px}
-.hdr{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);
-  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
-.logo{font-family:var(--font-mono);font-size:14px;font-weight:bold;color:var(--green);letter-spacing:2px}
-.badge{font-family:var(--font-mono);font-size:9px;padding:2px 7px;border-radius:3px;
+.hdr{display:flex;align-items:center;gap:8px;padding:9px 16px;background:#fff;
+  border-bottom:2px solid var(--teal);position:sticky;top:0;z-index:10;
+  box-shadow:0 2px 8px rgba(8,145,178,0.08)}
+.logo{font-family:var(--font-mono);font-size:14px;font-weight:bold;color:var(--teal);letter-spacing:2px}
+.badge{font-family:var(--font-mono);font-size:9px;padding:3px 8px;border-radius:20px;
   background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
-.live{background:#0a2e1a;color:var(--green);border-color:#00b87d}
-.htime{margin-left:auto;font-family:var(--font-mono);color:var(--green)}
+.live{background:#d1fae5;color:var(--green);border-color:#6ee7b7;font-weight:700}
+.htime{margin-left:auto;font-family:var(--font-mono);color:var(--teal);font-weight:600}
 .alert-strip{display:none;background:var(--red);color:#fff;font-family:var(--font-mono);
-  font-size:11px;font-weight:bold;text-align:center;padding:5px;animation:blink .6s infinite}
+  font-size:11px;font-weight:bold;text-align:center;padding:6px;animation:blink .6s infinite;
+  letter-spacing:.5px}
 .alert-strip.show{display:block}
-.prox-strip{display:none;background:#7c2d00;color:#fed7aa;font-family:var(--font-mono);
-  font-size:11px;font-weight:bold;text-align:center;padding:5px 14px;
-  border-bottom:2px solid #f97316;letter-spacing:.5px}
+.prox-strip{display:none;background:#fff7ed;color:#c2410c;font-family:var(--font-mono);
+  font-size:11px;font-weight:bold;text-align:center;padding:6px 14px;
+  border-bottom:3px solid #f97316;letter-spacing:.5px}
 .prox-strip.show{display:block}
-.prox-source{font-size:9px;opacity:.7;margin-left:8px;text-transform:uppercase}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
-.main{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px}
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
-.ph{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;
-  border-bottom:1px solid var(--border);font-size:10px;font-weight:600;letter-spacing:.5px;
-  text-transform:uppercase;color:var(--text2);background:var(--bg3)}
-.mc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:7px}
-.mc{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 7px}
-.ml{font-size:8px;letter-spacing:.8px;text-transform:uppercase;color:#334455;margin-bottom:2px}
-.mv{font-family:var(--font-mono);font-size:15px;font-weight:bold;color:var(--green)}
+.prox-source{font-size:9px;opacity:.65;margin-left:8px;text-transform:uppercase}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
+.main{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;
+  border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;color:var(--teal);background:var(--bg3)}
+.mc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px}
+.mc{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 8px}
+.ml{font-size:8px;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);margin-bottom:3px;font-weight:600}
+.mv{font-family:var(--font-mono);font-size:15px;font-weight:bold;color:var(--teal)}
 .mv.warn{color:var(--amber)}.mv.danger{color:var(--red)}
-.risk-row{display:flex;align-items:center;gap:10px;padding:5px 8px 4px}
-.rb{font-family:var(--font-mono);font-size:12px;font-weight:bold;padding:3px 14px;border-radius:3px}
-.r-low{background:#0a2e1a;color:var(--green);border:1px solid #00b87d}
-.r-moderate{background:#2d1e00;color:var(--amber);border:1px solid #a16207}
-.r-high{background:#2d0808;color:var(--red);border:1px solid #991b1b;animation:blink .7s infinite}
-.det-list{padding:5px 7px;display:flex;flex-direction:column;gap:3px;min-height:44px}
-.di{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:4px;
-  padding:3px 6px;font-family:var(--font-mono);font-size:10px;background:var(--bg3)}
-.sd{width:7px;height:7px;border-radius:50%}
+.risk-row{display:flex;align-items:center;gap:10px;padding:6px 10px 5px}
+.rb{font-family:var(--font-mono);font-size:12px;font-weight:bold;padding:4px 16px;border-radius:20px;border:2px solid}
+.r-low{background:var(--green-l);color:var(--green);border-color:#6ee7b7}
+.r-moderate{background:var(--amber-l);color:var(--amber);border-color:#fcd34d}
+.r-high{background:var(--red-l);color:var(--red);border-color:#fca5a5;animation:blink .7s infinite}
+.det-list{padding:6px 8px;display:flex;flex-direction:column;gap:4px;min-height:48px}
+.di{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:6px;
+  padding:4px 8px;font-family:var(--font-mono);font-size:10px;background:var(--bg3)}
+.sd{width:8px;height:8px;border-radius:50%}
 .sev-minor{background:#4ade80}.sev-moderate{background:var(--amber)}.sev-severe{background:var(--red)}
-.gps-row{display:flex;flex-wrap:wrap;gap:10px;padding:6px 10px}
+.gps-row{display:flex;flex-wrap:wrap;gap:12px;padding:8px 12px}
 .gf{font-family:var(--font-mono);font-size:10px}
-.gf .k{color:var(--text2)}.gf .v{color:var(--green);margin-left:3px}
-.sw{padding:8px;background:var(--bg2);margin:8px;border-radius:6px}
-.st{font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;
-  margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-.export-btn{font-family:var(--font-mono);font-size:9px;color:var(--green);text-decoration:none;
-  padding:2px 7px;border:1px solid #00b87d;border-radius:3px;background:#0a2e1a}
-.export-btn:hover{background:#0d3d22}
-.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 8px 8px}
-.stat-box{background:var(--bg2);border:1px solid var(--border);border-radius:6px;
-  padding:12px;text-align:center}
+.gf .k{color:var(--text2);font-weight:600}.gf .v{color:var(--teal);margin-left:4px;font-weight:700}
+.sw{padding:10px;background:#fff;margin:0 10px 10px;border-radius:10px;
+  border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,0.05)}
+.st{font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;font-weight:700;
+  margin-bottom:7px;display:flex;justify-content:space-between;align-items:center}
+.export-btn{font-family:var(--font-mono);font-size:9px;color:var(--teal);text-decoration:none;
+  padding:3px 9px;border:1px solid var(--teal);border-radius:20px;background:var(--bg3)}
+.export-btn:hover{background:#e0f2fe}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:0 10px 10px}
+.stat-box{background:#fff;border:1px solid var(--border);border-radius:10px;
+  padding:14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.05)}
 .stat-val{font-family:var(--font-mono);font-size:28px;font-weight:bold;
-  color:var(--green);line-height:1.1}
-.stat-lbl{font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-top:4px}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 8px 8px}
-.ah-item{display:flex;align-items:center;gap:8px;padding:4px 8px;
+  color:var(--teal);line-height:1.1}
+.stat-lbl{font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-top:5px;font-weight:600}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px 10px}
+.ah-item{display:flex;align-items:center;gap:8px;padding:5px 10px;
   border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:10px}
 .ah-item:last-child{border-bottom:none}
-.ah-badge{font-size:9px;padding:1px 6px;border-radius:3px;font-weight:600;flex-shrink:0}
-.ah-high{background:#2d0808;color:var(--red)}.ah-moderate{background:#2d1e00;color:var(--amber)}
+.ah-badge{font-size:9px;padding:2px 8px;border-radius:20px;font-weight:700;flex-shrink:0;border:1px solid}
+.ah-high{background:var(--red-l);color:var(--red);border-color:#fca5a5}
+.ah-moderate{background:var(--amber-l);color:var(--amber);border-color:#fcd34d}
 </style>
 </head>
 <body>
@@ -106,9 +115,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   <span class="badge">NEO-6M GPS</span>
   <div class="htime" id="htime">--:--:--</div>
   <button onclick="recalibrateDriver()" id="recal-btn"
-    style="font-family:var(--font-mono);font-size:9px;padding:3px 10px;
-           border:1px solid #00b87d;border-radius:3px;background:#0a2e1a;
-           color:var(--green);cursor:pointer;margin-left:8px">
+    style="font-family:var(--font-mono);font-size:9px;padding:4px 12px;
+           border:2px solid var(--teal);border-radius:20px;background:var(--green-l);
+           color:var(--teal);cursor:pointer;margin-left:8px;font-weight:700">
     NEW DRIVER
   </button>
 </div>
@@ -135,17 +144,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
     </div>
     <div class="risk-row">
       <div class="rb r-low" id="risk-badge">LOW</div>
-      <span id="d-state" style="font-family:var(--font-mono);font-size:11px;color:var(--green)">ALERT</span>
+      <span id="d-state" style="font-family:var(--font-mono);font-size:11px;color:var(--teal);font-weight:700">ALERT</span>
     </div>
     <!-- Circular gauge -->
     <div style="display:flex;justify-content:center;padding:4px 0 8px">
       <svg viewBox="0 0 130 78" width="150" height="90">
-        <path d="M 13,65 A 52,52 0 0,1 117,65" fill="none" stroke="#1c2a3a" stroke-width="13" stroke-linecap="round"/>
-        <path id="gauge-arc" d="M 13,65 A 52,52 0 0,1 117,65" fill="none" stroke="#00e5a0"
+        <path d="M 13,65 A 52,52 0 0,1 117,65" fill="none" stroke="#e2e8f0" stroke-width="13" stroke-linecap="round"/>
+        <path id="gauge-arc" d="M 13,65 A 52,52 0 0,1 117,65" fill="none" stroke="#059669"
           stroke-width="13" stroke-linecap="round" stroke-dasharray="163.4" stroke-dashoffset="163.4"/>
-        <text id="gauge-pct" x="65" y="58" text-anchor="middle" fill="#00e5a0"
+        <text id="gauge-pct" x="65" y="58" text-anchor="middle" fill="#059669"
           font-size="20" font-family="monospace" font-weight="bold">0%</text>
-        <text x="65" y="74" text-anchor="middle" fill="#6a8aaa"
+        <text x="65" y="74" text-anchor="middle" fill="#64748b"
           font-size="8" font-family="sans-serif" letter-spacing="1">RISK SCORE</text>
       </svg>
     </div>
@@ -155,10 +164,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   <div class="panel">
     <div class="ph"><span>Road Damage</span><span>YOLOv8-nano · RDD2022</span></div>
     <div class="det-list" id="det-list">
-      <div style="color:var(--text2);font-size:10px;padding:4px">No detections</div>
+      <div style="color:var(--text2);font-size:10px;padding:6px;font-style:italic">No detections</div>
     </div>
     <div style="border-top:1px solid var(--border);padding:6px 7px">
-      <div style="font-size:8px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Session counts</div>
+      <div style="font-size:8px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;font-weight:700">Session counts</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
         <div class="mc"><div class="ml">Potholes</div>
           <div class="mv" id="cnt-pothole" style="color:var(--red)">0</div></div>
@@ -210,7 +219,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   <div class="sw" style="margin:0">
     <div class="st"><span>Recent Alerts — HIGH &amp; MODERATE</span></div>
     <div id="alert-history" style="max-height:180px;overflow-y:auto">
-      <div style="color:var(--text2);font-size:10px;padding:4px">No alerts yet</div>
+      <div style="color:var(--text2);font-size:10px;padding:6px;font-style:italic">No alerts yet</div>
     </div>
   </div>
   <div class="sw" style="margin:0">
@@ -236,11 +245,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
     <span>ROAD HAZARD MAP — click pins for details</span>
     <a class="export-btn" href="/api/export/road" download>Export Road CSV</a>
   </div>
-  <div id="map" style="height:260px;border-radius:4px"></div>
+  <div id="map" style="height:260px;border-radius:8px;border:1px solid var(--border)"></div>
   <div style="display:flex;gap:14px;padding:6px 4px 2px;font-size:9px;
     color:var(--text2);font-family:var(--font-mono)">
-    <span><span style="color:#ef4444">&#9679;</span> Severe</span>
-    <span><span style="color:#f59e0b">&#9679;</span> Moderate</span>
+    <span><span style="color:#dc2626">&#9679;</span> Severe</span>
+    <span><span style="color:#d97706">&#9679;</span> Moderate</span>
     <span><span style="color:#22c55e">&#9679;</span> Minor</span>
     <span style="margin-left:auto">Scroll=zoom · Drag=pan · Click pin=details</span>
   </div>
@@ -273,7 +282,7 @@ socket.on("proximity_alert", d => {
 
 function updateGauge(score, riskLevel) {
   const arc = $("gauge-arc"), pct = $("gauge-pct");
-  const color = riskLevel === "high" ? "#ef4444" : riskLevel === "moderate" ? "#f59e0b" : "#00e5a0";
+  const color = riskLevel === "high" ? "#dc2626" : riskLevel === "moderate" ? "#d97706" : "#059669";
   arc.setAttribute("stroke-dashoffset", 163.4 * (1 - Math.min(score, 1)));
   arc.setAttribute("stroke", color);
   pct.textContent = Math.round(score * 100) + "%";
@@ -294,13 +303,13 @@ socket.on("vsm_update", data => {
   rb.className   = "rb r-" + data.risk_level;
   $("d-state").textContent = data.driver_state;
   $("d-state").style.color = data.risk_level === "high" ? "var(--red)" :
-    data.risk_level === "moderate" ? "var(--amber)" : "var(--green)";
+    data.risk_level === "moderate" ? "var(--amber)" : "var(--teal)";
   updateGauge(data.risk_score || 0, data.risk_level);
   $("alert-strip").className = "alert-strip" + (data.risk_level === "high" ? " show" : "");
   const dl = $("det-list");
   dl.innerHTML = "";
   if (!data.road_detections || !data.road_detections.length) {
-    dl.innerHTML = '<div style="color:var(--text2);font-size:10px;padding:4px">No detections</div>';
+    dl.innerHTML = '<div style="color:var(--text2);font-size:10px;padding:6px;font-style:italic">No detections</div>';
   } else {
     data.road_detections.forEach(d => {
       const row = document.createElement("div"); row.className = "di";
@@ -331,8 +340,8 @@ setInterval(() => { $("htime").textContent = new Date().toLocaleTimeString(); },
 function recalibrateDriver() {
   const btn = $("recal-btn");
   btn.textContent = "CALIBRATING...";
-  btn.style.color = "#f59e0b";
-  btn.style.borderColor = "#a16207";
+  btn.style.color = "#d97706";
+  btn.style.borderColor = "#d97706";
   btn.disabled = true;
   fetch("/api/recalibrate", { method: "POST" })
     .then(r => r.json())
@@ -341,14 +350,14 @@ function recalibrateDriver() {
       setTimeout(() => {
         btn.textContent = "NEW DRIVER";
         btn.style.color = "var(--green)";
-        btn.style.borderColor = "#00b87d";
+        btn.style.borderColor = "#059669";
         btn.disabled = false;
       }, 4000);
     })
     .catch(() => {
       btn.textContent = "NEW DRIVER";
       btn.style.color = "var(--green)";
-      btn.style.borderColor = "#00b87d";
+      btn.style.borderColor = "#059669";
       btn.disabled = false;
     });
 }
@@ -374,7 +383,7 @@ function refreshAlertHistory() {
     const alerts = rows.filter(r => r.risk === "high" || r.risk === "moderate");
     const ah = $("alert-history");
     if (!alerts.length) {
-      ah.innerHTML = '<div style="color:var(--text2);font-size:10px;padding:4px">No alerts yet</div>';
+      ah.innerHTML = '<div style="color:var(--text2);font-size:10px;padding:6px;font-style:italic">No alerts yet</div>';
       return;
     }
     ah.innerHTML = alerts.slice(0, 10).map(r => {
@@ -397,14 +406,14 @@ const stateChart = new Chart(document.getElementById("state-chart"), {
     labels: ["ALERT","DROWSY","DISTRACTED","FATIGUED"],
     datasets: [{
       data: [0,0,0,0],
-      backgroundColor: ["#00e5a0","#ef4444","#f59e0b","#3b82f6"],
+      backgroundColor: ["#059669","#dc2626","#d97706","#2563eb"],
       borderWidth: 0, hoverOffset: 4
     }]
   },
   options: {
     animation: false,
     plugins: {
-      legend: { position:"right", labels:{ color:"#6a8aaa", font:{size:9}, padding:8, boxWidth:10 } }
+      legend: { position:"right", labels:{ color:"#64748b", font:{size:9}, padding:8, boxWidth:10 } }
     },
     cutout: "65%"
   }
@@ -415,8 +424,8 @@ const earChart = new Chart(document.getElementById("ear-chart"), {
   data: {
     labels: [],
     datasets: [
-      { data:[], borderColor:"#00e5a0", borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
-      { data:[], borderColor:"#ef4444", borderWidth:1, borderDash:[4,4], pointRadius:0, fill:false }
+      { data:[], borderColor:"#059669", borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+      { data:[], borderColor:"#dc2626", borderWidth:1, borderDash:[4,4], pointRadius:0, fill:false }
     ]
   },
   options: {
@@ -424,7 +433,7 @@ const earChart = new Chart(document.getElementById("ear-chart"), {
     plugins: { legend: { display:false } },
     scales: {
       x: { display:false },
-      y: { min:0, max:0.55, ticks:{color:"#6a8aaa",font:{size:9}}, grid:{color:"rgba(100,100,100,.15)"} }
+      y: { min:0, max:0.55, ticks:{color:"#64748b",font:{size:9}}, grid:{color:"rgba(100,100,100,.15)"} }
     }
   }
 });
@@ -448,7 +457,7 @@ function refreshMap() {
     markers.clearLayers();
     events.forEach(e => {
       if (!e.lat || !e.lon) return;
-      const c = e.severity==="severe" ? "#ef4444" : e.severity==="moderate" ? "#f59e0b" : "#22c55e";
+      const c = e.severity==="severe" ? "#dc2626" : e.severity==="moderate" ? "#d97706" : "#22c55e";
       L.circleMarker([e.lat,e.lon],{color:c,fillColor:c,fillOpacity:.75,radius:7,weight:1.5})
        .bindPopup("<b>"+(e.class_name||"damage")+"</b><br>Severity: "+e.severity+"<br>Confidence: "+Math.round(e.confidence*100)+"%<br>"+(e.ts_iso||"").slice(0,19))
        .addTo(markers);
@@ -462,13 +471,13 @@ function refreshTable() {
   fetch("/api/events/driver").then(r => r.json()).then(rows => {
     const cols = ["time","ear","mar","risk","state","lat","lon"];
     let h = '<table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:10px">';
-    h += "<tr>"+cols.map(c=>`<th style="padding:4px 8px;background:#0d1b2a;color:#00e5a0;text-align:left">${c}</th>`).join("")+"</tr>";
+    h += "<tr>"+cols.map(c=>`<th style="padding:4px 8px;background:#0d1b2a;color:#059669;text-align:left">${c}</th>`).join("")+"</tr>";
     rows.slice(0,12).forEach(r => {
-      const rc = r.risk==="high"?"#ef4444":r.risk==="moderate"?"#f59e0b":"#6a8aaa";
+      const rc = r.risk==="high"?"#dc2626":r.risk==="moderate"?"#d97706":"#64748b";
       const vals = [(r.ts_iso||"").slice(11,19),(r.ear||0).toFixed(3),(r.mar||0).toFixed(3),
         `<span style="color:${rc}">${r.risk||""}</span>`,r.state||"",
         r.lat?(+r.lat).toFixed(4):"—",r.lon?(+r.lon).toFixed(4):"—"];
-      h += "<tr>"+vals.map(v=>`<td style="padding:3px 8px;border-bottom:1px solid #1c2a3a;color:#c4d4e4">${v}</td>`).join("")+"</tr>";
+      h += "<tr>"+vals.map(v=>`<td style="padding:3px 8px;border-bottom:1px solid #e2e8f0;color:#1e293b">${v}</td>`).join("")+"</tr>";
     });
     $("evt-table").innerHTML = h+"</table>";
   }).catch(() => {});
