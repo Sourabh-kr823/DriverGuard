@@ -43,6 +43,7 @@ from modules.gps.gps_reader         import GPSReader
 from modules.database.db_manager    import DatabaseManager
 from modules.alert.alert_manager    import AlertManager
 from dashboard.app                  import create_app
+from modules.road.proximity_alert   import ProximityAlertManager
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -203,14 +204,17 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
 
 def alert_sync_thread(alert: AlertManager, dms: DriverMonitor,
                       road: RoadDamageDetector, gps: GPSReader,
-                      stop: threading.Event):
+                      stop: threading.Event, prox=None):
     """Syncs DMS + road results into AlertManager at 10 Hz."""
     while not stop.is_set():
+        fix = gps.latest
         alert.update(
             dms_result      = dms.latest,
             road_detections = road.latest,
-            gps_fix         = gps.latest,
+            gps_fix         = fix,
         )
+        if prox is not None:
+            prox.update_gps(fix)
         time.sleep(0.1)
 
 # ─── Shared preview frames ────────────────────────────────────────────────────
@@ -271,6 +275,7 @@ def main():
     dms     = DriverMonitor(cfg["dms"])
     road    = RoadDamageDetector(cfg["road"])
     alert   = AlertManager(cfg)
+    prox    = ProximityAlertManager(db, cfg=cfg)
 
     # ── Cameras ───────────────────────────────────────────────────────────────
     dms_cam_cfg  = cfg["cameras"]["dms"]
@@ -304,6 +309,7 @@ def main():
     dms.start()
     road.start()
     alert.start()
+    prox.start()
     dms_cam.start()
     time.sleep(3)
     road_cam.start()
@@ -320,7 +326,7 @@ def main():
             args=(road, road_cam, alert, db, args.preview, stop, road_writer),
             daemon=True, name="RoadPipeline"),
         threading.Thread(target=alert_sync_thread,
-            args=(alert, dms, road, gps, stop),
+            args=(alert, dms, road, gps, stop, prox),
             daemon=True, name="AlertSync"),
     ]
     for t in threads:
@@ -331,7 +337,7 @@ def main():
         dash_cfg = cfg.get("alert", {})
         host = dash_cfg.get("dashboard_host", "0.0.0.0")
         port = dash_cfg.get("dashboard_port", 5000)
-        app, socketio = create_app(alert, db, cfg)
+        app, socketio = create_app(alert, db, cfg, proximity_manager=prox)
 
         def _run_dash():
             logger.info(f"[Dashboard] http://{host}:{port}")

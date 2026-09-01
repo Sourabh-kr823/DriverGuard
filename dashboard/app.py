@@ -47,6 +47,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
 .alert-strip{display:none;background:var(--red);color:#fff;font-family:var(--font-mono);
   font-size:11px;font-weight:bold;text-align:center;padding:5px;animation:blink .6s infinite}
 .alert-strip.show{display:block}
+.prox-strip{display:none;background:#7c2d00;color:#fed7aa;font-family:var(--font-mono);
+  font-size:11px;font-weight:bold;text-align:center;padding:5px 14px;
+  border-bottom:2px solid #f97316;letter-spacing:.5px}
+.prox-strip.show{display:block}
+.prox-source{font-size:9px;opacity:.7;margin-left:8px;text-transform:uppercase}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
 .main{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px}
 .panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
@@ -460,7 +465,7 @@ setInterval(refreshTable, 5000);
 </html>"""
 
 
-def create_app(alert_manager, db_manager, cfg: dict):
+def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
     app      = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
     push_interval = 1.0 / 10
@@ -537,6 +542,14 @@ def create_app(alert_manager, db_manager, cfg: dict):
             "road_total":road_total,"pothole":pothole,"crack":crack,
             "rutting":rutting,"repair":repair})
 
+    @app.route("/api/proximity")
+    def api_proximity():
+        """Return the current proximity alert (if any)."""
+        prox = getattr(api_proximity, "_manager", None)
+        if prox is None:
+            return jsonify(None)
+        return jsonify(prox.latest_alert)
+
     @app.route("/api/export/driver")
     def export_driver_csv():
         rows = _filter_session(db_manager.query_recent_driver_events(500))
@@ -565,6 +578,10 @@ def create_app(alert_manager, db_manager, cfg: dict):
                 s   = alert_manager.state
                 msg = {k: v for k, v in s.__dict__.items() if k != "annotated_frame"}
                 socketio.emit("vsm_update", msg)
+                # Push proximity alert separately for targeted UI handling
+                if proximity_manager is not None:
+                    pa = proximity_manager.latest_alert
+                    socketio.emit("proximity_alert", pa or {})
             except Exception as e:
                 logger.debug(f"[Dashboard] Push error: {e}")
 

@@ -53,6 +53,7 @@ class AlertState:
     lat: Optional[float] = None
     lon: Optional[float] = None
     speed_kmh: float = 0.0
+    proximity_alert: dict = field(default_factory=dict)  # from ProximityAlertManager
     updated_at: float = field(default_factory=time.time)
 
 
@@ -83,6 +84,9 @@ class AlertManager:
         # Debounce: don't re-trigger audio within N seconds
         self._last_audio_ts = 0.0
         self._audio_cooldown = 4.0
+
+        # Proximity alert (set externally by ProximityAlertManager)
+        self._proximity_alert: dict = {}
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -173,6 +177,7 @@ class AlertManager:
                 lat            = gps_fix.lat  if gps_fix else None,
                 lon            = gps_fix.lon  if gps_fix else None,
                 speed_kmh      = gps_fix.speed_kmh if gps_fix else 0.0,
+                proximity_alert= self._proximity_alert,
                 updated_at     = time.time(),
             )
 
@@ -225,6 +230,11 @@ class AlertManager:
         threading.Thread(target=_play, daemon=True).start()
 
     # ── Public ────────────────────────────────────────────────────────────────
+
+    def set_proximity_alert(self, alert: dict):
+        """Called by ProximityAlertManager to inject the current proximity alert."""
+        with self._lock:
+            self._proximity_alert = alert or {}
 
     @property
     def state(self) -> AlertState:
