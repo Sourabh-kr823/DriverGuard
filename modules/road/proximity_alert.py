@@ -283,7 +283,11 @@ class ProximityAlertManager:
 
             if dist < best_dist:
                 best_dist = dist
-                class_name = ev.get("class_name", "hazard")
+                raw_name   = ev.get("class_name", "hazard")
+                # Map integer class IDs to names (old DB events store ints)
+                _id_map = {"0": "pothole", "1": "crack_longitudinal",
+                           "2": "crack_transverse", "3": "rutting", "4": "repair"}
+                class_name = _id_map.get(str(raw_name), str(raw_name))
                 severity   = ev.get("severity",   "unknown")
                 dist_int   = int(round(dist / 5) * 5)   # round to nearest 5m
 

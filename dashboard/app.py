@@ -116,6 +116,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
 <div class="alert-strip" id="alert-strip">
   WARNING: DROWSINESS DETECTED — PLEASE TAKE A BREAK
 </div>
+<div class="prox-strip" id="prox-strip">
+  <span id="prox-msg">⚠ ROAD HAZARD AHEAD</span>
+  <span class="prox-source" id="prox-source" style="font-size:9px;opacity:.7;margin-left:8px;text-transform:uppercase"></span>
+</div>
 
 <div class="main">
   <!-- DMS Panel with circular gauge -->
@@ -255,6 +259,17 @@ let lastRisk = 'low';
 
 socket.on("connect",    () => { $("conn-badge").textContent = "● LIVE"; });
 socket.on("disconnect", () => { $("conn-badge").textContent = "● OFFLINE"; });
+
+socket.on("proximity_alert", d => {
+  const strip = $("prox-strip");
+  if (d && d.message) {
+    $("prox-msg").textContent    = d.message;
+    $("prox-source").textContent = d.source === "osm" ? "(OpenStreetMap)" : "(from your drive history)";
+    strip.classList.add("show");
+  } else {
+    strip.classList.remove("show");
+  }
+});
 
 function updateGauge(score, riskLevel) {
   const arc = $("gauge-arc"), pct = $("gauge-pct");
