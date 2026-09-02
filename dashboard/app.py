@@ -31,6 +31,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 <style>
 :root{
   --bg:#f0f4f8;--bg2:#ffffff;--bg3:#f8fafc;--border:#e2e8f0;
@@ -120,6 +121,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
            color:var(--teal);cursor:pointer;margin-left:8px;font-weight:700">
     NEW DRIVER
   </button>
+  <div class="weather-widget" id="weather-widget">
+    <span id="w-icon">🌤</span>
+    <span id="w-city" class="wt">—</span>
+    <span id="w-temp">—°C</span>
+    <span id="w-desc" style="font-size:9px">—</span>
+    <span id="w-rain" class="wr" style="display:none">⚠ Wet roads</span>
+  </div>
+  <span class="timer-badge" id="timer-badge">00:00:00</span>
+</div>
+<div class="fatigue-banner" id="fatigue-banner">
+  ⚠ FATIGUE RISK — You have been driving for 2+ hours. Please take a break.
 </div>
 
 <div class="alert-strip" id="alert-strip">
@@ -194,6 +206,32 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   </div>
 </div>
 
+<!-- Driver scorecard + FPS -->
+<div style="display:grid;grid-template-columns:1fr 3fr;gap:10px;padding:0 10px 10px">
+  <div class="scorecard-box">
+    <div class="score-val" id="score-val" style="color:#059669">—</div>
+    <div class="score-grade" id="score-grade" style="color:#059669">—</div>
+    <div class="score-lbl">Driver Score</div>
+  </div>
+  <div class="fps-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;font-weight:700">Live Performance</span>
+      <span style="font-family:var(--font-mono);font-size:9px;color:var(--text2)" id="latency-lbl">—ms latency</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>
+        <div style="font-size:8px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Dashboard FPS</div>
+        <div class="fps-val" id="fps-val">—</div>
+        <div class="fps-bar-wrap" id="fps-bars"></div>
+      </div>
+      <div>
+        <div style="font-size:8px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Risk Trend</div>
+        <canvas id="fps-chart" height="38"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Session statistics -->
 <div class="stat-grid">
   <div class="stat-box">
@@ -245,6 +283,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
     <span>ROAD HAZARD MAP — click pins for details</span>
     <a class="export-btn" href="/api/export/road" download>Export Road CSV</a>
   </div>
+  <button class="hmap-toggle" id="hmap-btn" onclick="toggleHeatmap()">🗺 Switch to Heatmap</button>
   <div id="map" style="height:260px;border-radius:8px;border:1px solid var(--border)"></div>
   <div style="display:flex;gap:14px;padding:6px 4px 2px;font-size:9px;
     color:var(--text2);font-family:var(--font-mono)">
@@ -484,6 +523,196 @@ function refreshTable() {
 }
 refreshTable();
 setInterval(refreshTable, 5000);
+
+// ══ FEATURE 1: Session Timer + Fatigue Warning ══════════════════════════════
+const SESSION_START = Date.now();
+const FATIGUE_THRESHOLD = 2 * 60 * 60 * 1000; // 2 hours in ms
+
+setInterval(() => {
+  const elapsed  = Date.now() - SESSION_START;
+  const h = Math.floor(elapsed / 3600000);
+  const m = Math.floor((elapsed % 3600000) / 60000);
+  const s = Math.floor((elapsed % 60000) / 1000);
+  const pad = n => String(n).padStart(2,'0');
+  const badge = $("timer-badge");
+  badge.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+  if (elapsed >= FATIGUE_THRESHOLD) {
+    badge.classList.add("fatigue");
+    $("fatigue-banner").classList.add("show");
+  }
+}, 1000);
+
+// ══ FEATURE 2: Driver Scorecard ═════════════════════════════════════════════
+function updateScorecard(stats) {
+  let score = 100;
+  score -= (stats.high_count     || 0) * 8;
+  score -= (stats.moderate_count || 0) * 3;
+  score -= (stats.drowsy_count   || 0) * 5;
+  score -= (stats.distracted_count || 0) * 3;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const grades = [
+    [90, 'A', '#059669', 'Excellent'],
+    [75, 'B', '#0891b2', 'Good'],
+    [60, 'C', '#d97706', 'Average'],
+    [40, 'D', '#ea580c', 'Poor'],
+    [ 0, 'F', '#dc2626', 'Unsafe'],
+  ];
+  const [, grade, color, label] = grades.find(([min]) => score >= min);
+  $("score-val").textContent  = score;
+  $("score-val").style.color  = color;
+  $("score-grade").textContent = `Grade ${grade} — ${label}`;
+  $("score-grade").style.color = color;
+}
+
+// ══ FEATURE 3: Real-Time FPS + Latency ══════════════════════════════════════
+const _fpsHistory = [];
+const _riskHistory = [];
+const MAX_HISTORY  = 20;
+let   _lastUpdateTs = 0;
+
+function trackFPS() {
+  const now = performance.now();
+  if (_lastUpdateTs > 0) {
+    const fps = 1000 / (now - _lastUpdateTs);
+    _fpsHistory.push(fps);
+    if (_fpsHistory.length > MAX_HISTORY) _fpsHistory.shift();
+    const avgFps = _fpsHistory.reduce((a,b) => a+b, 0) / _fpsHistory.length;
+    $("fps-val").textContent = avgFps.toFixed(1);
+    const barsEl = $("fps-bars");
+    barsEl.innerHTML = _fpsHistory.slice(-10).map(f => {
+      const h = Math.min(28, Math.max(4, Math.round(f / 35 * 28)));
+      const c = f >= 25 ? '#059669' : f >= 15 ? '#d97706' : '#dc2626';
+      return `<div class="fps-bar" style="height:${h}px;background:${c}"></div>`;
+    }).join('');
+  }
+  _lastUpdateTs = now;
+}
+
+// Risk trend mini chart
+const riskChart = new Chart($("fps-chart"), {
+  type: "line",
+  data: { labels: [], datasets: [{
+    data: [], borderColor: "#0891b2", borderWidth: 1.5,
+    pointRadius: 0, tension: 0.4, fill: true,
+    backgroundColor: "rgba(8,145,178,0.1)"
+  }]},
+  options: {
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { display: false },
+      y: { min: 0, max: 1, display: false }
+    }
+  }
+});
+
+function updateRiskTrend(score) {
+  _riskHistory.push(score);
+  if (_riskHistory.length > MAX_HISTORY) _riskHistory.shift();
+  riskChart.data.labels           = _riskHistory.map((_,i) => i);
+  riskChart.data.datasets[0].data = _riskHistory;
+  riskChart.update("none");
+}
+
+// Hook into vsm_update for FPS + risk trend
+const _origVsmHandler = socket.listeners("vsm_update")[0];
+socket.off("vsm_update");
+socket.on("vsm_update", data => {
+  trackFPS();
+  updateRiskTrend(data.risk_score || 0);
+  if (_origVsmHandler) _origVsmHandler(data);
+});
+
+// ══ FEATURE 4: Weather Widget ════════════════════════════════════════════════
+const WEATHER_ICONS = {
+  "01":"☀️","02":"⛅","03":"☁️","04":"☁️",
+  "09":"🌧","10":"🌦","11":"⛈","13":"❄️","50":"🌫"
+};
+
+function refreshWeather() {
+  fetch("/api/weather").then(r => r.json()).then(d => {
+    if (!d) return;
+    const iconCode = (d.icon || "01").slice(0, 2);
+    $("w-icon").textContent = WEATHER_ICONS[iconCode] || "🌤";
+    $("w-city").textContent = d.city || "—";
+    $("w-temp").textContent = `${d.temp}°C`;
+    $("w-desc").textContent = d.desc || "";
+    const rainEl = $("w-rain");
+    rainEl.style.display = d.is_rain ? "inline" : "none";
+    // If rain, slightly yellow-tint the weather widget
+    $("weather-widget").style.borderColor = d.is_rain ? "#fcd34d" : "var(--border)";
+    $("weather-widget").style.background  = d.is_rain ? "#fef9c3" : "var(--bg3)";
+  }).catch(() => {});
+}
+refreshWeather();
+setInterval(refreshWeather, 5 * 60 * 1000); // every 5 min
+
+// ══ FEATURE 5: Hazard Heatmap Toggle ════════════════════════════════════════
+let heatLayer = null;
+let heatMode  = false;
+
+function toggleHeatmap() {
+  const btn = $("hmap-btn");
+  heatMode = !heatMode;
+  if (heatMode) {
+    btn.textContent = "📍 Switch to Pins";
+    btn.classList.add("active");
+    markers.clearLayers();
+    buildHeatmap();
+  } else {
+    btn.textContent = "🗺 Switch to Heatmap";
+    btn.classList.remove("active");
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+    refreshMap();
+  }
+}
+
+function buildHeatmap() {
+  fetch("/api/events/road").then(r => r.json()).then(events => {
+    const pts = events
+      .filter(e => e.lat && e.lon)
+      .map(e => {
+        const intensity = e.severity === "severe" ? 1.0
+                        : e.severity === "moderate" ? 0.6 : 0.3;
+        return [e.lat, e.lon, intensity];
+      });
+    if (heatLayer) map.removeLayer(heatLayer);
+    heatLayer = L.heatLayer(pts, {
+      radius: 25, blur: 20, maxZoom: 17,
+      gradient: { 0.3: "#22c55e", 0.6: "#d97706", 1.0: "#dc2626" }
+    }).addTo(map);
+  }).catch(() => {});
+}
+
+// Override refreshMap to respect heatmap mode
+const _origRefreshMap = refreshMap;
+// Redefine refreshMap
+window._periodicMapRefresh = () => {
+  if (heatMode) buildHeatmap();
+  else _origRefreshMap();
+};
+// Replace the periodic interval
+clearInterval(window._mapInterval);
+window._mapInterval = setInterval(window._periodicMapRefresh, 5000);
+
+// ══ Patch refreshStats to also update scorecard ═══════════════════════════
+const _origRefreshStats = refreshStats;
+window.refreshStats = () => {
+  fetch("/api/session_stats").then(r => r.json()).then(d => {
+    $("stat-total").textContent   = d.total_driver;
+    $("stat-high").textContent    = d.high_count;
+    $("stat-avg-ear").textContent = (d.avg_ear || 0).toFixed(2);
+    $("stat-road").textContent    = d.road_total;
+    $("cnt-pothole").textContent  = d.pothole;
+    $("cnt-crack").textContent    = d.crack;
+    $("cnt-rutting").textContent  = d.rutting;
+    stateChart.data.datasets[0].data = [d.alert_count, d.drowsy_count, d.distracted_count, d.fatigued_count];
+    stateChart.update("none");
+    updateScorecard(d);
+  }).catch(() => {});
+};
+
 </script>
 </body>
 </html>"""
@@ -565,6 +794,45 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
             "distracted_count":distracted_c,"fatigued_count":fatigued_c,
             "road_total":road_total,"pothole":pothole,"crack":crack,
             "rutting":rutting,"repair":repair})
+
+    # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
+    _weather_cache = {"data": None, "ts": 0.0}
+    WEATHER_KEY    = "b71bb4fc5755d12d6cb3f0bf00281340"
+
+    @app.route("/api/weather")
+    def api_weather():
+        import requests as _req, time as _time
+        now = _time.time()
+        if now - _weather_cache["ts"] < 300 and _weather_cache["data"]:
+            return jsonify(_weather_cache["data"])
+        try:
+            st  = alert_manager.state
+            lat = st.lat if st.lat else 12.9716
+            lon = st.lon if st.lon else 77.5946
+            r   = _req.get(
+                "https://api.openweathermap.org/data/2.5/weather",
+                params={"lat": lat, "lon": lon, "appid": WEATHER_KEY, "units": "metric"},
+                timeout=5,
+            )
+            if r.status_code == 200:
+                d = r.json()
+                data = {
+                    "temp":      round(d["main"]["temp"]),
+                    "feels":     round(d["main"]["feels_like"]),
+                    "desc":      d["weather"][0]["description"].title(),
+                    "icon":      d["weather"][0]["icon"],
+                    "humidity":  d["main"]["humidity"],
+                    "wind_kmh":  round(d["wind"]["speed"] * 3.6),
+                    "city":      d["name"],
+                    "is_rain":   d["weather"][0]["main"].lower() in
+                                 ("rain","drizzle","thunderstorm"),
+                }
+                _weather_cache["data"] = data
+                _weather_cache["ts"]   = now
+                return jsonify(data)
+        except Exception as e:
+            logger.debug(f"[Weather] API error: {e}")
+        return jsonify(_weather_cache["data"])   # return stale if any
 
     @app.route("/api/proximity")
     def api_proximity():

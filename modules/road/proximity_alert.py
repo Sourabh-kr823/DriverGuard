@@ -153,7 +153,7 @@ class ProximityAlertManager:
     cfg        : dict              — full config dict (reads proximity section)
     """
 
-    def __init__(self, db_manager, cfg: dict = None):
+    def __init__(self, db_manager, cfg: dict = None, voice_alert=None):
         self._db          = db_manager
         cfg               = cfg or {}
         prox_cfg          = cfg.get("proximity_alert", {})
@@ -173,6 +173,7 @@ class ProximityAlertManager:
         self._active_alert: Optional[ProximityAlert] = None
         self._alerted_ids: dict = {}      # hazard_id → last alert timestamp
         self._last_osm_ts = 0.0
+        self._voice = voice_alert
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -316,6 +317,13 @@ class ProximityAlertManager:
 
         if best:
             logger.info(f"[Proximity] {best.message}")
+            if self._voice is not None:
+                dist_rounded = int(round(best.distance_m / 10) * 10)
+                name = best.hazard_type.replace("_"," ")
+                self._voice.speak(
+                    f"Caution! {name} detected {dist_rounded} metres ahead.",
+                    cooldown=self.cooldown_s
+                )
         return best
 
     # ── Public read ────────────────────────────────────────────────────────

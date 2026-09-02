@@ -44,6 +44,7 @@ from modules.database.db_manager    import DatabaseManager
 from modules.alert.alert_manager    import AlertManager
 from dashboard.app                  import create_app
 from modules.road.proximity_alert   import ProximityAlertManager
+from modules.alert.voice_alert       import VoiceAlert
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -274,8 +275,9 @@ def main():
     gps     = GPSReader(cfg["gps"])
     dms     = DriverMonitor(cfg["dms"])
     road    = RoadDamageDetector(cfg["road"])
-    alert   = AlertManager(cfg)
-    prox    = ProximityAlertManager(db, cfg=cfg)
+    voice   = VoiceAlert(cfg=cfg)
+    alert   = AlertManager(cfg, voice_alert=voice)
+    prox    = ProximityAlertManager(db, cfg=cfg, voice_alert=voice)
 
     # ── Cameras ───────────────────────────────────────────────────────────────
     dms_cam_cfg  = cfg["cameras"]["dms"]
@@ -308,6 +310,7 @@ def main():
     gps.start()
     dms.start()
     road.start()
+    voice.start()
     alert.start()
     prox.start()
     dms_cam.start()

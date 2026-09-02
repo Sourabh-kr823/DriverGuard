@@ -66,7 +66,7 @@ class AlertManager:
     cfg : dict  — full config dict (reads `dms.weights`, `alert`)
     """
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, voice_alert=None):
         self.weights     = cfg["dms"].get("weights", {"ear": 0.45, "mar": 0.25, "head": 0.30})
         self.alert_cfg   = cfg.get("alert", {})
         self.gpio_pin    = self.alert_cfg.get("buzzer_gpio_pin")
@@ -84,6 +84,7 @@ class AlertManager:
         # Debounce: don't re-trigger audio within N seconds
         self._last_audio_ts = 0.0
         self._audio_cooldown = 4.0
+        self._voice = voice_alert   # VoiceAlert instance (optional)
 
         # Proximity alert (set externally by ProximityAlertManager)
         self._proximity_alert: dict = {}
@@ -153,6 +154,16 @@ class AlertManager:
         if should_buzz and (time.time() - self._last_audio_ts) > self._audio_cooldown:
             self._play_audio()
             self._last_audio_ts = time.time()
+
+        # Voice TTS alerts
+        if self._voice is not None and dms_result is not None:
+            ds = dms_result.driver_state
+            if ds == "DROWSY":
+                self._voice.speak("Warning! Drowsiness detected. Please take a break.", cooldown=12.0)
+            elif ds == "DISTRACTED":
+                self._voice.speak("Warning! Driver distracted. Please focus on the road.", cooldown=10.0)
+            elif ds == "FATIGUED":
+                self._voice.speak("Fatigue alert. You appear tired. Consider stopping.", cooldown=15.0)
 
         # Build road summary for state
         road_summary = [
