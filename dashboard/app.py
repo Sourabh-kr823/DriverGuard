@@ -130,7 +130,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   </div>
   <span class="timer-badge" id="timer-badge">00:00:00</span>
 </div>
-<div class="fatigue-banner" id="fatigue-banner">
+<div class="fatigue-banner" id="fatigue-banner" style="display:none">
   ⚠ FATIGUE RISK — You have been driving for 2+ hours. Please take a break.
 </div>
 
@@ -525,20 +525,27 @@ refreshTable();
 setInterval(refreshTable, 5000);
 
 // ══ FEATURE 1: Session Timer + Fatigue Warning ══════════════════════════════
-const SESSION_START = Date.now();
-const FATIGUE_THRESHOLD = 2 * 60 * 60 * 1000; // 2 hours in ms
+const SESSION_START_MS = Date.now();           // Unix epoch milliseconds at page load
+const FATIGUE_LIMIT_MS = 2 * 60 * 60 * 1000;  // 7,200,000 ms = exactly 2 hours
 
 setInterval(() => {
-  const elapsed  = Date.now() - SESSION_START;
-  const h = Math.floor(elapsed / 3600000);
-  const m = Math.floor((elapsed % 3600000) / 60000);
-  const s = Math.floor((elapsed % 60000) / 1000);
-  const pad = n => String(n).padStart(2,'0');
+  const elapsedMs = Date.now() - SESSION_START_MS;  // ms since page load
+  const hh = Math.floor(elapsedMs / 3600000);
+  const mm = Math.floor((elapsedMs % 3600000) / 60000);
+  const ss = Math.floor((elapsedMs % 60000) / 1000);
+  const pad = n => String(n).padStart(2, '0');
   const badge = $("timer-badge");
-  badge.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
-  if (elapsed >= FATIGUE_THRESHOLD) {
+  badge.textContent = `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+
+  // Only warn after EXACTLY 2 hours (7,200,000 ms)
+  if (elapsedMs >= FATIGUE_LIMIT_MS) {
     badge.classList.add("fatigue");
+    $("fatigue-banner").style.display = "block";
     $("fatigue-banner").classList.add("show");
+  } else {
+    badge.classList.remove("fatigue");
+    $("fatigue-banner").style.display = "none";
+    $("fatigue-banner").classList.remove("show");
   }
 }, 1000);
 

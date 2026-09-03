@@ -155,15 +155,33 @@ class AlertManager:
             self._play_audio()
             self._last_audio_ts = time.time()
 
-        # Voice TTS alerts
+        # ── Voice TTS alerts — two tiers based on risk score ─────────────────
         if self._voice is not None and dms_result is not None:
             ds = dms_result.driver_state
-            if ds == "DROWSY":
-                self._voice.speak("Warning! Drowsiness detected. Please take a break.", cooldown=12.0)
-            elif ds == "DISTRACTED":
-                self._voice.speak("Warning! Driver distracted. Please focus on the road.", cooldown=10.0)
-            elif ds == "FATIGUED":
-                self._voice.speak("Fatigue alert. You appear tired. Consider stopping.", cooldown=15.0)
+
+            if score >= 0.70:
+                # ── SEVERE tier (risk >= 70%) — urgent, louder message ──────
+                self._voice.speak(
+                    "Severe alert! Extremely high risk! Please pull over immediately and rest!",
+                    cooldown=8.0
+                )
+            else:
+                # ── NORMAL tier (risk < 70%) — informative alerts ───────────
+                if ds == "DROWSY":
+                    self._voice.speak(
+                        "Warning! Drowsiness detected. Please take a break.",
+                        cooldown=12.0
+                    )
+                elif ds == "DISTRACTED":
+                    self._voice.speak(
+                        "Warning! Driver distracted. Please focus on the road.",
+                        cooldown=10.0
+                    )
+                elif ds == "FATIGUED":
+                    self._voice.speak(
+                        "Fatigue alert. You appear tired. Consider stopping for a rest.",
+                        cooldown=15.0
+                    )
 
         # Build road summary for state
         road_summary = [
