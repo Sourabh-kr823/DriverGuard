@@ -1,11 +1,13 @@
 """
 modules/alert/voice_alert.py
 ─────────────────────────────
-Offline TTS for Windows using pyttsx3 + PowerShell fallback.
+Dual-channel offline TTS:
+  • Driver channel  → Female voice (Microsoft Zira) — driver monitoring alerts
+  • Road channel    → Male voice   (Microsoft David) — road/pothole alerts
+  • Severe tier     → Faster rate + louder + emphasis on words
 
-FIX: Engine is recreated for every message — this is the only
-     reliable way to use pyttsx3 on Windows from a background thread
-     (SAPI5 COM objects are not thread-persistent).
+pyttsx3 engine is re-created per message (required for Windows SAPI5 threading).
+PowerShell fallback if pyttsx3 fails.
 """
 import threading
 import queue
@@ -15,90 +17,146 @@ from loguru import logger
 
 try:
     import pyttsx3
-    _PYTTSX3_AVAILABLE = True
+    _HAS_PYTTSX3 = True
 except ImportError:
-    _PYTTSX3_AVAILABLE = False
-    logger.warning("[Voice] pyttsx3 not installed — using PowerShell TTS only")
+    _HAS_PYTTSX3 = False
+    logger.warning("[Voice] pyttsx3 not found — using PowerShell TTS only")
+
+
+# ── Default Windows voice names ───────────────────────────────────────────────
+VOICE_FEMALE = "Microsoft Zira Desktop"    # Driver alerts (higher pitch naturally)
+VOICE_MALE   = "Microsoft David Desktop"   # Road/pothole alerts
 
 
 class VoiceAlert:
+    """
+    Two-channel voice alert system.
+
+    Usage:
+        voice = VoiceAlert(cfg=cfg)
+        voice.start()
+
+        voice.speak_driver("Drowsiness detected", severe=False)
+        voice.speak_driver("SEVERE ALERT! Pull over!", severe=True)
+        voice.speak_road("Pothole 70 metres ahead")
+    """
+
     def __init__(self, cfg: dict = None):
-        cfg            = cfg or {}
-        va             = cfg.get("voice_alert", {})
-        self._rate     = va.get("rate",     150)
-        self._volume   = va.get("volume",   0.9)
-        self._cooldown = va.get("cooldown", 8.0)
-        self._enabled  = va.get("enabled",  True)
-        self._q        = queue.Queue(maxsize=8)
-        self._last_ts  : dict = {}
+        cfg    = cfg or {}
+        va     = cfg.get("voice_alert", {})
+
+        # Normal settings
+        self._rate_normal   = va.get("rate_normal",   148)
+        self._rate_severe   = va.get("rate_severe",   205)  # faster = more urgent
+        self._vol_normal    = va.get("volume_normal",  0.9)
+        self._vol_severe    = va.get("volume_severe",  1.0)
+        self._cd_driver     = va.get("cooldown_driver", 10.0)
+        self._cd_road       = va.get("cooldown_road",    6.0)
+        self._cd_severe     = va.get("cooldown_severe",  7.0)
+        self._enabled       = va.get("enabled", True)
+
+        # Separate queues per channel so road and driver don't block each other
+        self._q_driver = queue.Queue(maxsize=4)
+        self._q_road   = queue.Queue(maxsize=4)
+
+        # Cooldown tracker: key → last spoken timestamp
+        self._last_ts: dict = {}
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self):
         if not self._enabled:
-            logger.info("[Voice] TTS disabled in config")
-            return
-        t = threading.Thread(target=self._worker, daemon=True, name="VoiceAlert")
-        t.start()
-        logger.info(f"[Voice] TTS started  (rate={self._rate}, cooldown={self._cooldown}s)")
+            logger.info("[Voice] TTS disabled in config"); return
+        threading.Thread(target=self._worker, args=(self._q_driver, "driver"),
+                         daemon=True, name="Voice-Driver").start()
+        threading.Thread(target=self._worker, args=(self._q_road, "road"),
+                         daemon=True, name="Voice-Road").start()
+        logger.info("[Voice] Dual-channel TTS started "
+                    f"(normal={self._rate_normal}wpm, severe={self._rate_severe}wpm)")
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def speak_driver(self, text: str, severe: bool = False):
+        """
+        Driver monitoring alert.
+        severe=True  → fast rate, full volume, female voice (sounds urgent)
+        severe=False → normal rate, female voice
+        """
+        cd = self._cd_severe if severe else self._cd_driver
+        self._enqueue(self._q_driver, text, cd, severe)
+
+    def speak_road(self, text: str):
+        """Road/pothole proximity alert — male voice, normal rate."""
+        self._enqueue(self._q_road, text, self._cd_road, False)
 
     def speak(self, text: str, cooldown: float = None):
-        """Queue a voice alert — dropped if in cooldown or queue full."""
-        if not self._enabled:
-            return
-        cd  = cooldown if cooldown is not None else self._cooldown
+        """Generic fallback — routes to driver channel."""
+        self._enqueue(self._q_driver, text, cooldown or self._cd_driver, False)
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _enqueue(self, q: queue.Queue, text: str, cooldown: float, severe: bool):
+        if not self._enabled: return
+        key = text
         now = time.time()
-        if now - self._last_ts.get(text, 0) < cd:
-            return
-        self._last_ts[text] = now
+        if now - self._last_ts.get(key, 0) < cooldown: return
+        self._last_ts[key] = now
         try:
-            self._q.put_nowait(text)
-            logger.debug(f"[Voice] Queued: {text!r}")
+            q.put_nowait((text, severe))
+            logger.debug(f"[Voice] Queued ({'severe' if severe else 'normal'}): {text!r}")
         except queue.Full:
-            logger.debug("[Voice] Queue full — alert dropped")
+            logger.debug("[Voice] Queue full — dropped")
 
-    def _worker(self):
-        """Background thread — speaks each queued message in order."""
-        logger.info("[Voice] Worker thread started")
+    def _worker(self, q: queue.Queue, channel: str):
+        logger.info(f"[Voice] {channel} worker started")
         while True:
-            text = self._q.get()
-            self._speak_once(text)
+            text, severe = q.get()
+            rate   = self._rate_severe   if severe else self._rate_normal
+            volume = self._vol_severe    if severe else self._vol_normal
+            voice  = VOICE_FEMALE        if channel == "driver" else VOICE_MALE
+            self._speak_once(text, rate, volume, voice)
 
-    def _speak_once(self, text: str):
-        """
-        Speak one message. Tries pyttsx3 first, falls back to PowerShell.
-        Engine is created fresh every call — required for Windows SAPI5.
-        """
-        # ── Method 1: pyttsx3 (preferred) ────────────────────────────────
-        if _PYTTSX3_AVAILABLE:
+    def _speak_once(self, text: str, rate: int, volume: float, voice_name: str):
+        """Speak one message — tries pyttsx3 first, falls back to PowerShell."""
+
+        # ── pyttsx3 ───────────────────────────────────────────────────────────
+        if _HAS_PYTTSX3:
             try:
                 engine = pyttsx3.init()
-                engine.setProperty("rate",   self._rate)
-                engine.setProperty("volume", self._volume)
+                engine.setProperty("rate",   rate)
+                engine.setProperty("volume", volume)
+                # Select voice by name (partial match)
+                voices = engine.getProperty("voices")
+                for v in voices:
+                    if voice_name.lower() in v.name.lower():
+                        engine.setProperty("voice", v.id)
+                        break
                 engine.say(text)
                 engine.runAndWait()
                 engine.stop()
                 del engine
-                logger.debug(f"[Voice] Spoke (pyttsx3): {text!r}")
+                logger.debug(f"[Voice] Spoke (pyttsx3 {voice_name}): {text!r}")
                 return
             except Exception as e:
-                logger.debug(f"[Voice] pyttsx3 failed: {e} — trying PowerShell")
+                logger.debug(f"[Voice] pyttsx3 error: {e}")
 
-        # ── Method 2: PowerShell SAPI5 (Windows fallback) ─────────────────
+        # ── PowerShell fallback ───────────────────────────────────────────────
         try:
-            safe = text.replace('"', "'").replace(';', ',')
-            rate = max(-10, min(10, int((self._rate - 150) / 15)))
-            subprocess.run(
-                [
-                    "powershell", "-WindowStyle", "Hidden", "-NonInteractive",
-                    "-Command",
-                    f'Add-Type -AssemblyName System.Speech; '
-                    f'$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; '
-                    f'$s.Rate = {rate}; '
-                    f'$s.Volume = {int(self._volume * 100)}; '
-                    f'$s.Speak("{safe}")',
-                ],
-                timeout=15,
-                capture_output=True,
+            safe = text.replace('"', "'").replace(';', ',').replace('!', ',')
+            ps_rate = max(-10, min(10, int((rate - 150) / 15)))
+            ps_vol  = int(volume * 100)
+            # Select voice by name in PowerShell
+            ps_cmd = (
+                f'Add-Type -AssemblyName System.Speech; '
+                f'$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; '
+                f'$s.Rate = {ps_rate}; $s.Volume = {ps_vol}; '
+                f'try {{ $s.SelectVoice("{voice_name}") }} catch {{}}; '
+                f'$s.Speak("{safe}")'
             )
-            logger.debug(f"[Voice] Spoke (PowerShell): {text!r}")
+            subprocess.run(
+                ["powershell", "-WindowStyle", "Hidden", "-NonInteractive", "-Command", ps_cmd],
+                timeout=15, capture_output=True,
+            )
+            logger.debug(f"[Voice] Spoke (PowerShell {voice_name}): {text!r}")
         except Exception as e:
-            logger.debug(f"[Voice] PowerShell TTS failed: {e}")
+            logger.debug(f"[Voice] PowerShell error: {e}")
