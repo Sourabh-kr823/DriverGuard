@@ -155,33 +155,32 @@ class AlertManager:
             self._play_audio()
             self._last_audio_ts = time.time()
 
-        # ── Voice TTS alerts — two tiers based on risk score ─────────────────
+        # ── Voice TTS — dual tier, dual channel (driver channel only) ──────────
         if self._voice is not None and dms_result is not None:
             ds = dms_result.driver_state
 
             if score >= 0.70:
-                # ── SEVERE tier (risk >= 70%) — urgent, louder message ──────
-                self._voice.speak(
-                    "Severe alert! Extremely high risk! Please pull over immediately and rest!",
-                    cooldown=8.0
+                # SEVERE tier: fast rate, full volume, female voice
+                # Text in caps = SAPI5 applies natural emphasis
+                self._voice.speak_driver(
+                    "SEVERE ALERT! EXTREMELY HIGH RISK! Pull over immediately and rest!",
+                    severe=True
                 )
-            else:
-                # ── NORMAL tier (risk < 70%) — informative alerts ───────────
-                if ds == "DROWSY":
-                    self._voice.speak(
-                        "Warning! Drowsiness detected. Please take a break.",
-                        cooldown=12.0
-                    )
-                elif ds == "DISTRACTED":
-                    self._voice.speak(
-                        "Warning! Driver distracted. Please focus on the road.",
-                        cooldown=10.0
-                    )
-                elif ds == "FATIGUED":
-                    self._voice.speak(
-                        "Fatigue alert. You appear tired. Consider stopping for a rest.",
-                        cooldown=15.0
-                    )
+            elif ds == "DROWSY":
+                self._voice.speak_driver(
+                    "Warning! Drowsiness detected. Please take a break.",
+                    severe=False
+                )
+            elif ds == "DISTRACTED":
+                self._voice.speak_driver(
+                    "Warning! Driver distracted. Please focus on the road.",
+                    severe=False
+                )
+            elif ds == "FATIGUED":
+                self._voice.speak_driver(
+                    "Fatigue alert. You appear tired. Consider stopping.",
+                    severe=False
+                )
 
         # Build road summary for state
         road_summary = [
