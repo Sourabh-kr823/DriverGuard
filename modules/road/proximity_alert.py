@@ -320,10 +320,8 @@ class ProximityAlertManager:
             if self._voice is not None and best.distance_m > 5:
                 dist_rounded = max(10, int(round(best.distance_m / 10) * 10))
                 name = best.hazard_type.replace("_"," ")
-                self._voice.speak(
-                    f"Caution! {name} {dist_rounded} metres ahead.",
-                    cooldown=self.cooldown_s
-                )
+                self._voice.speak_road(
+                    f"Caution! {name}, {dist_rounded} metres ahead.")
         return best
 
     # ── Public read ────────────────────────────────────────────────────────
