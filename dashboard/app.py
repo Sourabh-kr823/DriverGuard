@@ -804,7 +804,7 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
 
     # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
-    WEATHER_KEY    = "b71bb4fc5755d12d6cb3f0bf00281340"
+    WEATHER_KEY    = "abcd"
 
     @app.route("/api/weather")
     def api_weather():
