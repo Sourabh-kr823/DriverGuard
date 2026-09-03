@@ -317,11 +317,11 @@ class ProximityAlertManager:
 
         if best:
             logger.info(f"[Proximity] {best.message}")
-            if self._voice is not None:
-                dist_rounded = int(round(best.distance_m / 10) * 10)
+            if self._voice is not None and best.distance_m > 5:
+                dist_rounded = max(10, int(round(best.distance_m / 10) * 10))
                 name = best.hazard_type.replace("_"," ")
                 self._voice.speak(
-                    f"Caution! {name} detected {dist_rounded} metres ahead.",
+                    f"Caution! {name} {dist_rounded} metres ahead.",
                     cooldown=self.cooldown_s
                 )
         return best
