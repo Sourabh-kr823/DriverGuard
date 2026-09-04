@@ -804,7 +804,10 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
 
     # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
-    WEATHER_KEY    = "abcd"
+    import os as _os
+    WEATHER_KEY = _os.environ.get("OPENWEATHER_API_KEY", "")
+    if not WEATHER_KEY:
+        logger.warning("[Weather] OPENWEATHER_API_KEY not set in .env — weather widget disabled")
 
     @app.route("/api/weather")
     def api_weather():
@@ -812,6 +815,8 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         now = _time.time()
         if now - _weather_cache["ts"] < 300 and _weather_cache["data"]:
             return jsonify(_weather_cache["data"])
+        if not WEATHER_KEY:
+            return jsonify(None)
         try:
             st  = alert_manager.state
             lat = st.lat if st.lat else 12.9716
