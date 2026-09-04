@@ -805,6 +805,8 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
     # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
     import os as _os
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv()
     WEATHER_KEY = _os.environ.get("OPENWEATHER_API_KEY", "")
     if not WEATHER_KEY:
         logger.warning("[Weather] OPENWEATHER_API_KEY not set in .env — weather widget disabled")
