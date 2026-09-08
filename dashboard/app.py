@@ -273,6 +273,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   <div class="st">
     <span>EAR TREND — last 60 events</span>
     <a class="export-btn" href="/api/export/driver" download>Export Driver CSV</a>
+    <a class="export-btn" href="/api/export/session_report" download
+       style="background:#eff6ff;border-color:var(--blue);color:var(--blue);margin-left:6px">
+      Download PDF Report
+    </a>
   </div>
   <canvas id="ear-chart" height="70"></canvas>
 </div>
@@ -804,12 +808,7 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
 
     # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
-    import os as _os
-    from dotenv import load_dotenv as _load_dotenv
-    _load_dotenv()
-    WEATHER_KEY = _os.environ.get("OPENWEATHER_API_KEY", "")
-    if not WEATHER_KEY:
-        logger.warning("[Weather] OPENWEATHER_API_KEY not set in .env — weather widget disabled")
+    WEATHER_KEY    = "abcd"
 
     @app.route("/api/weather")
     def api_weather():
@@ -817,8 +816,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         now = _time.time()
         if now - _weather_cache["ts"] < 300 and _weather_cache["data"]:
             return jsonify(_weather_cache["data"])
-        if not WEATHER_KEY:
-            return jsonify(None)
         try:
             st  = alert_manager.state
             lat = st.lat if st.lat else 12.9716
@@ -855,6 +852,255 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         if prox is None:
             return jsonify(None)
         return jsonify(prox.latest_alert)
+
+    # ── PDF Session Report ────────────────────────────────────────────────────
+    @app.route("/api/export/session_report")
+    def api_export_session_report():
+        """Generate and return a formatted PDF session report."""
+        import io
+        from datetime import datetime
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph,
+                                         Spacer, Table, TableStyle, HRFlowable)
+        from flask import send_file
+
+        # ── Gather session data ───────────────────────────────────────────────
+        driver_rows = _filter_session(db_manager.query_recent_driver_events(500))
+        road_rows   = _filter_session(db_manager.query_recent_road_events(500))
+
+        # Stats
+        total_d    = len(driver_rows)
+        high_c     = sum(1 for r in driver_rows if r.get("risk") == "high")
+        moderate_c = sum(1 for r in driver_rows if r.get("risk") == "moderate")
+        drowsy_c   = sum(1 for r in driver_rows if r.get("state") == "DROWSY")
+        dist_c     = sum(1 for r in driver_rows if r.get("state") == "DISTRACTED")
+        fat_c      = sum(1 for r in driver_rows if r.get("state") == "FATIGUED")
+        ears       = [r["ear"] for r in driver_rows if r.get("ear") is not None]
+        avg_ear    = round(sum(ears)/len(ears), 3) if ears else 0
+        road_total = len(road_rows)
+        pothole_c  = sum(1 for r in road_rows if "pothole"  in (r.get("class_name") or ""))
+        crack_c    = sum(1 for r in road_rows if "crack"    in (r.get("class_name") or ""))
+        rutting_c  = sum(1 for r in road_rows if "rutting"  in (r.get("class_name") or ""))
+        repair_c   = sum(1 for r in road_rows if "repair"   in (r.get("class_name") or ""))
+        severe_r   = sum(1 for r in road_rows if r.get("severity") == "severe")
+
+        # Driver score
+        score = max(0, min(100, round(
+            100 - high_c*8 - moderate_c*3 - drowsy_c*5 - dist_c*3)))
+        grade_map = [(90,"A","Excellent"),(75,"B","Good"),
+                     (60,"C","Average"),(40,"D","Poor"),(0,"F","Unsafe")]
+        grade, label = next((g,l) for mn,g,l in grade_map if score >= mn)
+
+        # Session duration
+        now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        try:
+            s = datetime.fromisoformat(session_start_iso)
+            e = datetime.fromisoformat(now_iso)
+            dur_s = int((e - s).total_seconds())
+            hh,mm2,ss = dur_s//3600, (dur_s%3600)//60, dur_s%60
+            duration = f"{hh:02d}:{mm2:02d}:{ss:02d}"
+        except Exception:
+            duration = "—"
+
+        # ── Build PDF ─────────────────────────────────────────────────────────
+        buf = io.BytesIO()
+        W, H = A4
+        NAVY   = colors.HexColor("#1E3A5F")
+        TEAL   = colors.HexColor("#0891B2")
+        GREEN  = colors.HexColor("#059669")
+        ORANGE = colors.HexColor("#D97706")
+        RED    = colors.HexColor("#DC2626")
+        BLUE   = colors.HexColor("#2563EB")
+        DGRAY  = colors.HexColor("#374151")
+        MGRAY  = colors.HexColor("#6B7280")
+        LGRAY  = colors.HexColor("#F3F4F6")
+        BORDER = colors.HexColor("#E5E7EB")
+        WHITE  = colors.white
+
+        def S(n,**kw): return ParagraphStyle(n,**kw)
+        def SP(h=4):   return Spacer(1, h*mm)
+        def HR(col=TEAL,t=0.6):
+            return HRFlowable(width="100%",thickness=t,color=col,spaceAfter=3,spaceBefore=3)
+
+        doc = SimpleDocTemplate(buf, pagesize=A4,
+              leftMargin=18*mm, rightMargin=18*mm,
+              topMargin=14*mm, bottomMargin=14*mm)
+        story = []
+
+        # Header
+        hdr = Table([[
+            Paragraph("DriverGuard", S("h1",fontName="Helvetica-Bold",fontSize=22,textColor=WHITE)),
+            Paragraph("Session Report<br/>"
+                      f'<font size="9" color="#B3D9E8">{session_start_iso[:10]}  |  Duration: {duration}</font>',
+                      S("h2",fontName="Helvetica",fontSize=13,textColor=colors.HexColor("#B3D9E8"),alignment=TA_LEFT)),
+        ]], colWidths=["35%","65%"])
+        hdr.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),NAVY),
+            ("ROWPADDING",(0,0),(-1,-1),(12,12,12,12)),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ]))
+        story.append(hdr)
+        story.append(SP(5))
+
+        # Score bar
+        score_col = GREEN if score>=75 else (ORANGE if score>=50 else RED)
+        sc_tbl = Table([[
+            Paragraph(f"<b>{score}</b>",
+                S("sv",fontName="Helvetica-Bold",fontSize=40,textColor=score_col,alignment=TA_CENTER)),
+            Paragraph(f"<b>Grade {grade}</b><br/>{label}",
+                S("sg",fontName="Helvetica-Bold",fontSize=16,textColor=score_col)),
+            Paragraph("DRIVER SCORE",
+                S("sl",fontName="Helvetica-Bold",fontSize=9,textColor=MGRAY,
+                  charSpacing=2,alignment=TA_CENTER)),
+        ]], colWidths=["20%","35%","45%"])
+        sc_tbl.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),LGRAY),
+            ("BOX",(0,0),(-1,-1),1.0,score_col),
+            ("ROWPADDING",(0,0),(-1,-1),(10,8,10,8)),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ]))
+        story.append(sc_tbl)
+        story.append(SP(5))
+
+        # ── Driver stats ──────────────────────────────────────────────────────
+        def sec_banner(txt, col):
+            t = Table([[Paragraph(txt,
+                        S("bh",fontName="Helvetica-Bold",fontSize=10,textColor=WHITE))]],
+                      colWidths=["100%"])
+            t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),col),
+                                    ("ROWPADDING",(0,0),(-1,-1),(8,5,8,5))]))
+            return t
+
+        story.append(sec_banner("Driver Monitoring Summary", TEAL))
+        story.append(SP(3))
+
+        def cell(k, v, col=DGRAY):
+            return [Paragraph(k, S("k",fontName="Helvetica-Bold",fontSize=9.5,textColor=NAVY)),
+                    Paragraph(str(v), S("v",fontName="Helvetica",fontSize=9.5,textColor=col))]
+
+        driver_tbl = Table([
+            cell("Total Events",          total_d),
+            cell("HIGH Risk Alerts",      high_c,   RED),
+            cell("MODERATE Alerts",       moderate_c, ORANGE),
+            cell("Drowsy Events",         drowsy_c, RED),
+            cell("Distracted Events",     dist_c,   ORANGE),
+            cell("Fatigued Events",       fat_c,    ORANGE),
+            cell("Average EAR",           avg_ear,  TEAL),
+        ], colWidths=["40%","60%"])
+        driver_tbl.setStyle(TableStyle([
+            ("BOX",(0,0),(-1,-1),0.6,BORDER),
+            ("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+            ("BACKGROUND",(0,0),(0,-1),LGRAY),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("ROWPADDING",(0,0),(-1,-1),(7,5,7,5)),
+        ]))
+        story.append(driver_tbl)
+        story.append(SP(5))
+
+        # ── Road hazard stats ─────────────────────────────────────────────────
+        story.append(sec_banner("Road Hazard Summary", ORANGE))
+        story.append(SP(3))
+
+        road_tbl = Table([
+            cell("Total Road Events",     road_total),
+            cell("Severe Detections",     severe_r,  RED),
+            cell("Potholes",              pothole_c, RED),
+            cell("Cracks",                crack_c,   ORANGE),
+            cell("Rutting",               rutting_c, ORANGE),
+            cell("Repairs",               repair_c,  TEAL),
+        ], colWidths=["40%","60%"])
+        road_tbl.setStyle(TableStyle([
+            ("BOX",(0,0),(-1,-1),0.6,BORDER),
+            ("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+            ("BACKGROUND",(0,0),(0,-1),LGRAY),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("ROWPADDING",(0,0),(-1,-1),(7,5,7,5)),
+        ]))
+        story.append(road_tbl)
+        story.append(SP(5))
+
+        # ── Road events log table ─────────────────────────────────────────────
+        if road_rows:
+            story.append(sec_banner("Road Events Log (GPS Tagged)", RED))
+            story.append(SP(3))
+            def th(t): return Paragraph(t, S("th",fontName="Helvetica-Bold",fontSize=8.5,textColor=WHITE))
+            def td(t, col=DGRAY): return Paragraph(str(t), S("td",fontName="Helvetica",fontSize=8,textColor=col,leading=11))
+
+            re_data = [[th("Time"), th("Class"), th("Severity"), th("Conf"), th("Latitude"), th("Longitude")]]
+            for r in road_rows[:30]:   # max 30 rows
+                sev = r.get("severity","—")
+                sev_col = RED if sev=="severe" else (ORANGE if sev=="moderate" else GREEN)
+                re_data.append([
+                    td(str(r.get("ts_iso","—"))[-8:]),
+                    td(str(r.get("class_name","—")).replace("_"," ").title()),
+                    td(sev.upper(), sev_col),
+                    td(f"{r.get('confidence',0):.0%}"),
+                    td(f"{r.get('lat','—')}" if r.get("lat") else "—"),
+                    td(f"{r.get('lon','—')}" if r.get("lon") else "—"),
+                ])
+            re_tbl = Table(re_data, colWidths=["15%","22%","16%","10%","18.5%","18.5%"])
+            re_style = [
+                ("BACKGROUND",(0,0),(-1,0),RED),
+                ("BOX",(0,0),(-1,-1),0.6,BORDER),
+                ("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+                ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+                ("ROWPADDING",(0,0),(-1,-1),(5,4,5,4)),
+            ]
+            for i in range(1,len(re_data)):
+                if i%2==0: re_style.append(("BACKGROUND",(0,i),(-1,i),LGRAY))
+            re_tbl.setStyle(TableStyle(re_style))
+            story.append(re_tbl)
+            story.append(SP(3))
+            if len(road_rows)>30:
+                story.append(Paragraph(
+                    f"Showing 30 of {len(road_rows)} road events. Download Road CSV for full data.",
+                    S("note",fontName="Helvetica-Oblique",fontSize=8,textColor=MGRAY)))
+
+        # ── HIGH alert log ────────────────────────────────────────────────────
+        high_rows = [r for r in driver_rows if r.get("risk")=="high"][:20]
+        if high_rows:
+            story.append(SP(4))
+            story.append(sec_banner("HIGH Risk Driver Events", NAVY))
+            story.append(SP(3))
+            ha_data = [[th("Time"), th("State"), th("EAR"), th("MAR"), th("Yaw")]]
+            for r in high_rows:
+                ha_data.append([
+                    td(str(r.get("ts_iso","—"))[-8:]),
+                    td(str(r.get("state","—"))),
+                    td(f"{r.get('ear',0):.3f}"),
+                    td(f"{r.get('mar',0):.3f}"),
+                    td(f"{r.get('yaw',0):.1f}deg"),
+                ])
+            ha_tbl = Table(ha_data, colWidths=["20%","25%","18%","18%","19%"])
+            ha_style = [
+                ("BACKGROUND",(0,0),(-1,0),NAVY),
+                ("BOX",(0,0),(-1,-1),0.6,BORDER),
+                ("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+                ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+                ("ROWPADDING",(0,0),(-1,-1),(5,4,5,4)),
+            ]
+            for i in range(1,len(ha_data)):
+                if i%2==0: ha_style.append(("BACKGROUND",(0,i),(-1,i),LGRAY))
+            ha_tbl.setStyle(TableStyle(ha_style))
+            story.append(ha_tbl)
+
+        # ── Footer ────────────────────────────────────────────────────────────
+        story.append(SP(6))
+        story.append(HR(BORDER, 0.5))
+        story.append(Paragraph(
+            f"DriverGuard VSM v2.1  |  Generated: {now_iso}  |  "
+            "github.com/Sourabh-kr823/DriverGuard",
+            S("ft",fontName="Helvetica",fontSize=7.5,textColor=MGRAY,alignment=TA_CENTER)))
+
+        doc.build(story)
+        buf.seek(0)
+        fname = f"DriverGuard_Report_{session_start_iso[:10]}.pdf"
+        return send_file(buf, mimetype="application/pdf",
+                         as_attachment=True, download_name=fname)
 
     @app.route("/api/export/driver")
     def export_driver_csv():
