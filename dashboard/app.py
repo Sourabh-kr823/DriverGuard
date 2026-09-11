@@ -104,6 +104,41 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
 .ah-badge{font-size:9px;padding:2px 8px;border-radius:20px;font-weight:700;flex-shrink:0;border:1px solid}
 .ah-high{background:var(--red-l);color:var(--red);border-color:#fca5a5}
 .ah-moderate{background:var(--amber-l);color:var(--amber);border-color:#fcd34d}
+
+/* ── Dark / Light theme toggle ── */
+.theme-btn{background:none;border:1px solid var(--border);border-radius:20px;
+  padding:3px 10px;cursor:pointer;font-size:13px;color:var(--text2);
+  margin-left:6px;transition:all .2s}
+.theme-btn:hover{background:var(--bg3)}
+/* Toast notification */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--teal);color:#fff;
+  font-family:var(--font-mono);font-size:10px;padding:8px 16px;border-radius:20px;
+  opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* Dark theme overrides */
+body.dark{
+  --bg:#0f172a;--bg2:#1e293b;--bg3:#1e2d3d;--border:#334155;
+  --text:#e2e8f0;--text2:#94a3b8;
+  --green:#34d399;--amber:#fbbf24;--red:#f87171;--blue:#60a5fa;
+  --teal:#22d3ee;--green-l:#064e3b;--amber-l:#451a03;
+  --red-l:#450a0a;--blue-l:#1e3a5f}
+body.dark .panel{background:#1e293b;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+body.dark .mc{background:#0f172a}
+body.dark .stat-box{background:#1e293b;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+body.dark .sw{background:#1e293b;border-color:#334155}
+body.dark .scorecard-box{background:#1e293b}
+body.dark .fps-box{background:#1e293b}
+body.dark .ah-item{border-color:#334155}
+body.dark .di{background:#0f172a}
+body.dark .export-btn{background:#1e293b}
+body.dark .hmap-toggle{background:#1e293b}
+body.dark .hdr{background:#0f172a;border-color:#22d3ee}
+body.dark .ph{background:#0f172a;color:#22d3ee}
+body.dark .mc{background:#0f172a}
+body.dark .weather-widget{background:#1e293b;border-color:#334155}
+body.dark .timer-badge{background:#1e293b;border-color:#334155}
+body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
 </style>
 </head>
 <body>
@@ -129,6 +164,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
     <span id="w-rain" class="wr" style="display:none">⚠ Wet roads</span>
   </div>
   <span class="timer-badge" id="timer-badge">00:00:00</span>
+  <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle dark/light theme">🌙</button>
 </div>
 <div class="fatigue-banner" id="fatigue-banner" style="display:none">
   ⚠ FATIGUE RISK — You have been driving for 2+ hours. Please take a break.
@@ -724,6 +760,73 @@ window.refreshStats = () => {
   }).catch(() => {});
 };
 
+
+// ══ FEATURE: Dark / Light Theme Toggle ══════════════════════════════════════
+function toggleTheme() {
+  const isDark = document.body.classList.toggle("dark");
+  $("theme-btn").textContent = isDark ? "☀️" : "🌙";
+  try { localStorage.setItem("dg_theme", isDark ? "dark" : "light"); } catch(e){}
+}
+
+// Restore saved theme on load
+(function() {
+  try {
+    if (localStorage.getItem("dg_theme") === "dark") {
+      document.body.classList.add("dark");
+      const btn = $("theme-btn");
+      if (btn) btn.textContent = "☀️";
+    }
+  } catch(e) {}
+})();
+
+// ══ FEATURE: Keyboard Shortcuts ══════════════════════════════════════════════
+function showToast(msg) {
+  let toast = document.getElementById("kbd-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "kbd-toast";
+    toast.className = "toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove("show"), 2500);
+}
+
+document.addEventListener("keydown", (e) => {
+  // Don't fire if user is typing in an input / textarea
+  if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+  switch(e.key.toLowerCase()) {
+    case "n":
+      // N → NEW DRIVER recalibrate
+      recalibrateDriver();
+      showToast("⌨ N — Recalibrating for new driver...");
+      break;
+    case "d":
+      // D → Toggle Dark/Light theme
+      toggleTheme();
+      const dark = document.body.classList.contains("dark");
+      showToast(`⌨ D — Switched to ${dark ? "dark" : "light"} theme`);
+      break;
+    case "h":
+      // H → Toggle Heatmap
+      toggleHeatmap();
+      showToast("⌨ H — Heatmap toggled");
+      break;
+    case "m":
+      // M → Mute/unmute (future)
+      showToast("⌨ M — (mute coming soon)");
+      break;
+    case "?":
+      // ? → Show shortcuts
+      showToast("N=New Driver  D=Theme  H=Heatmap");
+      break;
+  }
+});
+
 </script>
 </body>
 </html>"""
@@ -1138,4 +1241,4 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
                 logger.debug(f"[Dashboard] Push error: {e}")
 
     socketio.start_background_task(_push_loop)
-    return app, socketio
+    return app, socketioa
