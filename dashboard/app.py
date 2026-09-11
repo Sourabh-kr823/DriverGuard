@@ -1241,4 +1241,4 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
                 logger.debug(f"[Dashboard] Push error: {e}")
 
     socketio.start_background_task(_push_loop)
-    return app, socketio
+    return app
