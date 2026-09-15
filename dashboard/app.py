@@ -139,6 +139,12 @@ body.dark .mc{background:#0f172a}
 body.dark .weather-widget{background:#1e293b;border-color:#334155}
 body.dark .timer-badge{background:#1e293b;border-color:#334155}
 body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
+
+.mute-btn{background:none;border:1px solid var(--border);border-radius:20px;
+  padding:3px 10px;cursor:pointer;font-size:13px;color:var(--text2);
+  margin-left:6px;transition:all .2s}
+.mute-btn:hover{background:var(--bg3)}
+.mute-btn.muted{background:var(--red-l);border-color:var(--red);color:var(--red)}
 </style>
 </head>
 <body>
@@ -164,6 +170,7 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
     <span id="w-rain" class="wr" style="display:none">⚠ Wet roads</span>
   </div>
   <span class="timer-badge" id="timer-badge">00:00:00</span>
+  <button class="mute-btn" id="mute-btn" onclick="toggleMute()" title="Mute/unmute voice alerts">🔊</button>
   <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle dark/light theme">🌙</button>
 </div>
 <div class="fatigue-banner" id="fatigue-banner" style="display:none">
@@ -818,7 +825,7 @@ document.addEventListener("keydown", (e) => {
       break;
     case "m":
       // M → Mute/unmute (future)
-      showToast("⌨ M — (mute coming soon)");
+      toggleMute();
       break;
     case "?":
       // ? → Show shortcuts
@@ -826,6 +833,23 @@ document.addEventListener("keydown", (e) => {
       break;
   }
 });
+
+
+// ══ FEATURE: Alert Mute Toggle ══════════════════════════════════════════════
+let _isMuted = false;
+
+function toggleMute() {
+  _isMuted = !_isMuted;
+  const btn = $("mute-btn");
+  btn.textContent = _isMuted ? "🔇" : "🔊";
+  btn.classList.toggle("muted", _isMuted);
+  showToast(_isMuted ? "🔇 Voice alerts muted" : "🔊 Voice alerts unmuted");
+  fetch("/api/mute", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({muted: _isMuted})
+  });
+}
 
 </script>
 </body>
@@ -908,6 +932,22 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
             "distracted_count":distracted_c,"fatigued_count":fatigued_c,
             "road_total":road_total,"pothole":pothole,"crack":crack,
             "rutting":rutting,"repair":repair})
+
+    # ── Mute / unmute voice alerts ────────────────────────────────────────
+    @app.route("/api/mute", methods=["POST"])
+    def api_mute():
+        from flask import request as _req
+        data = _req.get_json(silent=True) or {}
+        muted = bool(data.get("muted", False))
+        if proximity_manager is not None and hasattr(proximity_manager, "_voice"):
+            v = proximity_manager._voice
+            if v is not None:
+                v._enabled = not muted
+        # Also mute via alert_manager voice reference
+        if hasattr(alert_manager, "_voice") and alert_manager._voice is not None:
+            alert_manager._voice._enabled = not muted
+        logger.info(f"[Voice] {'Muted' if muted else 'Unmuted'} by dashboard")
+        return jsonify({"muted": muted})
 
     # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
