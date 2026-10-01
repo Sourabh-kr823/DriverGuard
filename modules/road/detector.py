@@ -4,11 +4,17 @@ modules/road/detector.py
 Road damage detection using YOLOv8-nano fine-tuned on RDD2022 +
 1 200 custom-annotated Indian road frames.
 
-Classes detected
+Classes detected (5 classes — matches yolov8n_rdd_india.pt)
 ----------------
     0 → pothole
-    1 → crack
-    2 → rutting
+    1 → crack_longitudinal
+    2 → crack_transverse
+    3 → rutting
+    4 → repair
+
+Per-class confidence thresholds (runtime deployment only):
+    pothole 0.35 / cracks 0.45 / rutting 0.50 / repair 0.55
+    (For paper mAP50 benchmarks, use a uniform threshold instead)
 
 Severity is determined by bounding-box area and confidence score:
     Minor    < 3 000 px²  or conf < 0.70
@@ -63,11 +69,32 @@ class RoadDamageDetector:
     cfg : dict  — the `road` section from config.yaml
     """
 
-    CLASS_NAMES = {0: "pothole", 1: "crack", 2: "rutting"}
+    CLASS_NAMES = {
+        0: "pothole",
+        1: "crack_longitudinal",
+        2: "crack_transverse",
+        3: "rutting",
+        4: "repair",
+    }
     COLOURS = {
-        "pothole": (0, 0, 220),    # red
-        "crack":   (0, 165, 255),  # orange
-        "rutting": (180, 0, 220),  # purple
+        "pothole":            (0, 0, 220),      # red
+        "crack_longitudinal": (0, 0, 0),        # black
+        "crack_transverse":   (0, 165, 255),    # orange
+        "rutting":            (42, 42, 165),    # brown
+        "repair":             (180, 0, 220),    # purple
+    }
+
+    # ── Per-class confidence thresholds (RUNTIME ONLY) ─────────────────────
+    # NOTE: These are for live deployment usability, NOT for mAP50 evaluation.
+    # For paper benchmarks, use a single uniform threshold across all classes.
+    # Rationale: potholes are safety-critical (catch more, lower threshold),
+    # repairs are non-critical (only flag if very confident, higher threshold).
+    PER_CLASS_CONF = {
+        0: 0.35,   # pothole           — catch more, safety critical
+        1: 0.45,   # crack_longitudinal
+        2: 0.45,   # crack_transverse
+        3: 0.50,   # rutting
+        4: 0.55,   # repair            — only flag if very confident
     }
     SEVERITY_COLOURS = {
         "minor":    (0, 200, 80),
@@ -78,8 +105,13 @@ class RoadDamageDetector:
     def __init__(self, cfg: dict):
         self.cfg        = cfg
         self.model_path = cfg["model_path"]
+        # Base conf is the LOWEST of all per-class thresholds so the model
+        # returns everything; we then filter per-class in process().
         self.conf_thr   = cfg.get("confidence_threshold", 0.50)
-        self.iou_thr    = cfg.get("iou_threshold", 0.45)
+        self.iou_thr    = cfg.get("iou_threshold", 0.35)   # tighter NMS — fewer duplicate boxes
+        # Runtime per-class filtering toggle (default on)
+        self.use_per_class = cfg.get("per_class_thresholds", True)
+        self._base_conf = min(self.PER_CLASS_CONF.values()) if self.use_per_class else self.conf_thr
 
         severity_cfg          = cfg.get("severity", {})
         self._minor_area_max  = severity_cfg.get("minor",    {}).get("area_px2_max", 3000)
@@ -127,9 +159,11 @@ class RoadDamageDetector:
         if self._model is None:
             return []
 
+        # Run model at the LOWEST threshold so nothing is pre-filtered,
+        # then apply per-class thresholds below.
         results = self._model.predict(
             frame,
-            conf=self.conf_thr,
+            conf=self._base_conf,
             iou=self.iou_thr,
             verbose=False,
             stream=False,
@@ -142,6 +176,13 @@ class RoadDamageDetector:
             for box in r.boxes:
                 cls_id  = int(box.cls[0])
                 conf    = float(box.conf[0])
+
+                # ── Per-class confidence filter (runtime only) ──────────────
+                if self.use_per_class:
+                    threshold = self.PER_CLASS_CONF.get(cls_id, self.conf_thr)
+                    if conf < threshold:
+                        continue   # skip detections below this class's threshold
+
                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
                 area    = max(0, (x2 - x1)) * max(0, (y2 - y1))
                 sev     = self._classify_severity(area, conf)
