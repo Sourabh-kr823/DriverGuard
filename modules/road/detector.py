@@ -94,7 +94,7 @@ class RoadDamageDetector:
         1: 0.45,   # crack_longitudinal
         2: 0.45,   # crack_transverse
         3: 0.50,   # rutting
-        4: 0.55,   # repair            — only flag if very confident
+        4: 0.50,   # repair            — only flag if very confident
     }
     SEVERITY_COLOURS = {
         "minor":    (0, 200, 80),
