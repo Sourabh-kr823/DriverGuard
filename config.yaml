@@ -2,122 +2,17 @@
 # #  Driver Guard  |  config.yaml
 # # ─────────────────────────────────────────────────────────
 
-# system:
-#   name: "Driver Guard v2.1"
-#   log_level: "INFO"           # DEBUG | INFO | WARNING | ERROR
-#   fps_target: 30
-
-# # ── Camera ───────────────────────────────────────────────
-# # cameras:
-# #   dms:                        # IR cabin-facing camera
-# #     source: 0                 # OpenCV device index (or RTSP URL)
-# #     width: 640
-# #     height: 480
-# #     fps: 30
-# #     flip: false               # mirror if camera is mirrored
-# #   road:                       # Wide-angle front road camera
-# #     source: 1
-# #     width: 1280
-# #     height: 720
-# #     fps: 30
-
-# cameras:
-#   dms:
-#     source: 0
-#     width: 640
-#     height: 480
-#     fps: 30
-#   road:
-#     source: 0
-#     width: 640
-#     height: 480
-#     fps: 30
-
-# # ── Driver Monitoring System ──────────────────────────────
-# # dms:
-# #   # Face detection back-end: "dlib" | "mediapipe" | "both"
-# #   backend: "both"
-# #   dlib_model_path: "models/shape_predictor_68_face_landmarks.dat"
-# #   mediapipe_confidence: 0.5
-
-# dms:
-#   backend: "mediapipe"
-
-#   # Eye Aspect Ratio
-#   ear:
-#     threshold: 0.25
-#     consec_frames: 15         # frames below threshold → alert
-
-#   # Mouth Aspect Ratio
-#   mar:
-#     threshold: 0.65
-#     consec_frames: 10
-
-#   # Head Pose (degrees)
-#   head_pose:
-#     yaw_limit: 30             # ± degrees
-#     pitch_limit: 20
-
-#   # Risk scoring weights (sum to 1.0)
-#   weights:
-#     ear: 0.45
-#     mar: 0.25
-#     head: 0.30
-
-# # ── Road Damage Detection ─────────────────────────────────
-# road:
-#   model_path: "models/yolov8n_rdd_india.pt"
-#   confidence_threshold: 0.50
-#   iou_threshold: 0.45
-#   classes:
-#     0: "pothole"
-#     1: "crack"
-#     2: "rutting"
-#   severity:
-#     minor:    { area_px2_max: 3000,  conf_max: 0.70 }
-#     moderate: { area_px2_max: 10000, conf_max: 0.85 }
-#     severe:   { area_px2_min: 10000 }
-
-# # ── GPS ───────────────────────────────────────────────────
-# gps:
-#   # enabled: true
-#   # port: "/dev/ttyUSB0"        # or "/dev/ttyAMA0" on RPi
-#   # baudrate: 9600
-#   # timeout: 1.0
-#   # simulation: false           # true → use simulated GPS trace
-#   enabled: true
-#   simulation: true
-
-# # ── Alert / Buzzer ────────────────────────────────────────
-# # alert:
-# #   buzzer_gpio_pin: 17         # Raspberry Pi BCM pin (None → skip)
-# #   audio_alert: true
-# #   audio_file: "assets/alert.wav"
-# #   dashboard_host: "0.0.0.0"
-# #   dashboard_port: 5000
-# #   # Consecutive high-risk frames before escalating alert
-# #   escalation_frames: 5
-# alert:
-#   buzzer_gpio_pin: null
-#   audio_alert: false
-
-# # ── Database ──────────────────────────────────────────────
-# database:
-#   path: "data/logs/driver_guard_events.db"
-#   flush_interval_sec: 5
-#   max_rows_per_table: 50000   # rotate after this many rows
-
 system:
   log_level: "DEBUG"
 
 cameras:
   dms:
-    source: 1      # this is your laptop camera on your system
+    source: 1      # laptop camera (driver-facing)
     width: 640
     height: 480
     fps: 30
   road:
-    source: 0      # this is your USB webcam on your system
+    source: 0      # USB webcam (road-facing)
     width: 640
     height: 480
     fps: 30
@@ -126,14 +21,14 @@ dms:
   backend: "mediapipe"
   ear:
     threshold: 0.30       # pre-calibration fallback; auto-cal overrides this
-    consec_frames: 20     # 20 fr = 667ms sustained closure → DROWSY
+    consec_frames: 20     # 20 fr = 667ms sustained closure -> DROWSY
   mar:
-    threshold: 0.50       # updated for corrected 6-pt MAR scale (was 0.75 on bogus scale)
-    consec_frames: 12     # 12 fr = 400ms sustained yawn → FATIGUED
+    threshold: 0.50       # corrected 6-pt MAR scale
+    consec_frames: 12     # 12 fr = 400ms sustained yawn -> FATIGUED
   head_pose:
     yaw_limit: 30
     pitch_limit: 20
-    consec_frames: 8      # NEW: 8 fr = 267ms sustained deviation → DISTRACTED
+    consec_frames: 8      # 8 fr = 267ms sustained deviation -> DISTRACTED
   weights:
     ear: 0.45
     mar: 0.25
@@ -141,7 +36,9 @@ dms:
 
 road:
   model_path: "models/yolov8n_rdd_india.pt"
-  confidence_threshold: 0.50
+  confidence_threshold: 0.50     # used when per_class_thresholds is false (paper benchmarks)
+  iou_threshold: 0.35            # NEW: tighter NMS -> fewer duplicate boxes
+  per_class_thresholds: true     # NEW: runtime per-class conf (pothole 0.35 ... repair 0.55)
   classes:
     0: "pothole"
     1: "crack_longitudinal"
@@ -158,7 +55,29 @@ gps:
   enabled: true
   simulation: true
   port: "COM3"
-  baud: 9600
+  baudrate: 9600         # FIXED: was 'baud' — gps_reader.py expects 'baudrate'
+  timeout: 1.0
+
+# ── NEW: Predictive proximity alert ───────────────────────
+proximity_alert:
+  radius_metres: 80        # warn when hazard within this distance
+  ahead_degrees: 70        # +/- heading tolerance to count as "ahead"
+  cooldown_seconds: 4      # min seconds between same-hazard alerts
+  display_seconds: 6       # how long alert stays on dashboard
+  osm_enabled: true        # Layer 2: OpenStreetMap road surface check
+  osm_cooldown_s: 30       # query OSM at most every N seconds
+  min_speed_kmh: 3.0       # don't alert when parked
+
+# ── NEW: Dual-channel voice alerts ────────────────────────
+voice_alert:
+  enabled: true
+  rate_normal: 148         # words per minute (normal tier)
+  rate_severe: 205         # faster for severe alerts (risk >= 70%)
+  volume_normal: 0.9
+  volume_severe: 1.0
+  cooldown_driver: 10.0    # seconds between driver alerts
+  cooldown_road: 6.0       # seconds between road alerts
+  cooldown_severe: 7.0     # seconds between severe alerts
 
 alert:
   buzzer_gpio_pin: null
@@ -171,4 +90,5 @@ alert:
 
 database:
   path: "data/logs/driver_guard_events.db"
-  flush_interval: 5
+  flush_interval_sec: 5      # FIXED: was 'flush_interval' — db_manager expects 'flush_interval_sec'
+  max_rows_per_table: 50000
