@@ -78,10 +78,12 @@ class DriverMonitor:
     cfg : dict  — the `dms` section from config.yaml
     """
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, draw_overlays: bool = True):
         self.cfg = cfg
         self.backend = cfg.get("backend", "both")
         self._lock   = threading.Lock()
+        # PERF: when False, skip frame.copy(), HUD text, landmark dots, pose axes
+        self.draw_overlays = draw_overlays
 
         # ── Frame counters ────────────────────────────────────────────────────
         self._eye_counter  = 0
@@ -149,7 +151,7 @@ class DriverMonitor:
                 self._mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
                     static_image_mode=False,
                     max_num_faces=1,
-                    refine_landmarks=True,
+                    refine_landmarks=False,   # PERF: iris tracking not needed → saves ~15-20ms/frame
                     min_detection_confidence=self.cfg.get("mediapipe_confidence", 0.5),
                     min_tracking_confidence=0.5,
                 )
@@ -196,16 +198,22 @@ class DriverMonitor:
         -------
         DMSResult
         """
-        result = DMSResult(annotated_frame=frame.copy())
+        # PERF: only copy the frame if we will actually draw on it
+        annotated = frame.copy() if self.draw_overlays else frame
+        result = DMSResult(annotated_frame=annotated)
         h, w = frame.shape[:2]
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # PERF: grayscale is only needed by dlib; skip it in mediapipe-only mode
+        gray = None
+        if self._dlib_detector and self._dlib_predictor:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         ear, mar = 0.0, 0.0
         yaw, pitch, roll = 0.0, 0.0, 0.0
         face_found = False
 
         # ── Try dlib ──────────────────────────────────────────────────────────
-        if self._dlib_detector and self._dlib_predictor:
+        if self._dlib_detector and self._dlib_predictor and gray is not None:
             faces = self._dlib_detector(gray, 0)
             if faces:
                 face_found = True
@@ -214,7 +222,8 @@ class DriverMonitor:
                 d_yaw, d_pitch, d_roll = estimate_head_pose_dlib(shape, h, w)
                 ear, mar = d_ear, d_mar
                 yaw, pitch, roll = d_yaw, d_pitch, d_roll
-                self._annotate_dlib(result.annotated_frame, shape, faces[0])
+                if self.draw_overlays:
+                    self._annotate_dlib(result.annotated_frame, shape, faces[0])
 
         # ── Try mediapipe ─────────────────────────────────────────────────────
         if self._mp_face_mesh:
@@ -236,8 +245,9 @@ class DriverMonitor:
                     yaw, pitch = mp_yaw, mp_pitch
                     roll       = mp_roll
 
-                draw_head_pose_axes(result.annotated_frame, fl,
-                                    "mediapipe", yaw, pitch, roll)
+                if self.draw_overlays:
+                    draw_head_pose_axes(result.annotated_frame, fl,
+                                        "mediapipe", yaw, pitch, roll)
 
         # ── Auto-calibration ──────────────────────────────────────────────────
         # Runs silently for first 90 frames (~3 s) while face is detected.
@@ -351,7 +361,8 @@ class DriverMonitor:
         result.alert_info        = info
         result.face_detected     = face_found
 
-        self._overlay_hud(result.annotated_frame, result)
+        if self.draw_overlays:
+            self._overlay_hud(result.annotated_frame, result)
         with self._lock:
             self._last_result = result
         return result
