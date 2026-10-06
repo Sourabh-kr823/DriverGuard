@@ -38,6 +38,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
+import torch
 import cv2
 import numpy as np
 from loguru import logger
@@ -118,21 +119,22 @@ class RoadDamageDetector:
         self._mod_area_max    = severity_cfg.get("moderate", {}).get("area_px2_max", 10000)
 
         self._model  = None
+        self._device = "cpu"
         self._lock   = threading.Lock()
         self._latest: List[Detection] = []
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self):
-        """Load YOLOv8 model weights."""
         logger.info(f"[Road] Loading YOLOv8 model: {self.model_path}")
         try:
             from ultralytics import YOLO
-            self._model = YOLO(self.model_path)
-            # Warm-up pass
+            self._device = 0 if torch.cuda.is_available() else "cpu"
+            self._model  = YOLO(self.model_path)
+            self._model.to(self._device)
             dummy = np.zeros((640, 640, 3), dtype=np.uint8)
-            self._model.predict(dummy, verbose=False)
-            logger.success("[Road] YOLOv8-nano loaded ✓")
+            self._model.predict(dummy, verbose=False, device=self._device)
+            logger.success(f"[Road] YOLOv8-nano loaded on {str(self._device).upper()} ✓")
         except FileNotFoundError:
             logger.warning(f"[Road] Model file not found: {self.model_path}. "
                            "Using dummy detections.")
@@ -167,6 +169,7 @@ class RoadDamageDetector:
             iou=self.iou_thr,
             verbose=False,
             stream=False,
+            device=self._device,
         )
 
         detections: List[Detection] = []
