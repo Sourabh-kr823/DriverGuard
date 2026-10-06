@@ -169,9 +169,16 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
                 alert: AlertManager, db: DatabaseManager,
                 show_preview: bool, stop: threading.Event,
                 writer: cv2.VideoWriter = None):
-    """Road Damage Detection loop."""
     logger.info("[Road] Pipeline thread started")
+    _target_dt = 1 / 30
+    # Fix 2: track last logged event per class to avoid duplicate DB entries
+    # key = class_name, value = (timestamp, lat, lon)
+    _last_logged: dict = {}
+    _MIN_LOG_INTERVAL = 5.0   # seconds between same-class logs at same location
+    _MIN_LOG_DISTANCE = 10.0  # metres between same-class logs (haversine)
+
     while not stop.is_set():
+        _t0 = time.time()
         frame = cam.read()
         if frame is None:
             time.sleep(0.033)
@@ -184,7 +191,28 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
         gps = alert.state
         dets = detector.process(frame, lat=gps.lat, lon=gps.lon)
 
+        now = time.time()
         for d in dets:
+            prev = _last_logged.get(d.class_name)
+            if prev is not None:
+                elapsed = now - prev[0]
+                if elapsed < _MIN_LOG_INTERVAL:
+                    # same class seen recently — skip unless far enough away
+                    if d.lat and prev[1]:
+                        import math
+                        dlat = math.radians(d.lat - prev[1])
+                        dlon = math.radians((d.lon or 0) - (prev[2] or 0))
+                        a = (math.sin(dlat/2)**2 +
+                             math.cos(math.radians(prev[1])) *
+                             math.cos(math.radians(d.lat)) *
+                             math.sin(dlon/2)**2)
+                        dist_m = 6_371_000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+                        if dist_m < _MIN_LOG_DISTANCE:
+                            continue
+                    else:
+                        continue
+
+            _last_logged[d.class_name] = (now, d.lat, d.lon)
             db.log_road_event(
                 class_name=d.class_name,
                 confidence=d.confidence,
@@ -193,8 +221,7 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
                 lat=d.lat, lon=d.lon,
             )
             logger.info(f"[Road] {d.class_name} | {d.severity.upper()} "
-                        f"| conf={d.confidence:.2f} "
-                        f"| area={d.area_px2}px²")
+                        f"| conf={d.confidence:.2f} | area={d.area_px2}px²")
 
         # if show_preview:
         #     annotated = detector.annotate(frame, dets)
@@ -206,7 +233,10 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
             with _preview_lock:
                 _preview_frames["road"] = annotated
 
-        time.sleep(1 / 30)
+        _elapsed = time.time() - _t0
+        _sleep   = _target_dt - _elapsed
+        if _sleep > 0:
+            time.sleep(_sleep)
 
 
 def alert_sync_thread(alert: AlertManager, dms: DriverMonitor,
@@ -320,7 +350,7 @@ def main():
     alert.start()
     prox.start()
     dms_cam.start()
-    time.sleep(3)
+    time.sleep(1)
     road_cam.start()
 
     db.log_system("INFO", "Driver Guard system started")
@@ -399,4 +429,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()a
