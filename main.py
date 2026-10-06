@@ -119,7 +119,9 @@ def dms_thread(dms: DriverMonitor, cam: CameraCapture,
     prev_risk  = "low"
     frame_skip = 0
 
+    _target_dt = 1 / 30   # aim for 30 FPS
     while not stop.is_set():
+        _t0 = time.time()
         frame = cam.read()
         if frame is None:
             time.sleep(0.033)
@@ -156,7 +158,11 @@ def dms_thread(dms: DriverMonitor, cam: CameraCapture,
             with _preview_lock:
                 _preview_frames["dms"] = display
 
-        time.sleep(1 / 30)
+        # PERF: adaptive sleep — only wait for the remaining time in the frame budget
+        _elapsed = time.time() - _t0
+        _sleep   = _target_dt - _elapsed
+        if _sleep > 0:
+            time.sleep(_sleep)
 
 
 def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
@@ -273,7 +279,7 @@ def main():
     # ── Instantiate modules ───────────────────────────────────────────────────
     db      = DatabaseManager(cfg["database"])
     gps     = GPSReader(cfg["gps"])
-    dms     = DriverMonitor(cfg["dms"])
+    dms     = DriverMonitor(cfg["dms"], draw_overlays=args.preview)
     road    = RoadDamageDetector(cfg["road"])
     voice   = VoiceAlert(cfg=cfg)
     alert   = AlertManager(cfg, voice_alert=voice)
