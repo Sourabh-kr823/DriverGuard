@@ -28,6 +28,7 @@ import argparse
 import sys
 import time
 import threading
+import math
 import signal
 from pathlib import Path
 
@@ -144,15 +145,6 @@ def dms_thread(dms: DriverMonitor, cam: CameraCapture,
                         f"| State: {result.driver_state} "
                         f"| EAR: {result.ear:.2f} MAR: {result.mar:.2f}")
 
-        # if show_preview:
-        #     cv2.imshow("DMS — Driver Monitor", result.annotated_frame)
-        #     if cv2.waitKey(1) & 0xFF == ord('q'):
-        #         stop.set()
-        # if show_preview:
-        #     display = result.annotated_frame if result.annotated_frame is not None else frame
-        #     cv2.imshow("DMS — Driver Monitor", display)
-        #     if cv2.waitKey(1) & 0xFF == ord('q'):
-        #         stop.set()
         if show_preview:
             display = result.annotated_frame if result.annotated_frame is not None else frame
             with _preview_lock:
@@ -199,7 +191,6 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
                 if elapsed < _MIN_LOG_INTERVAL:
                     # same class seen recently — skip unless far enough away
                     if d.lat and prev[1]:
-                        import math
                         dlat = math.radians(d.lat - prev[1])
                         dlon = math.radians((d.lon or 0) - (prev[2] or 0))
                         a = (math.sin(dlat/2)**2 +
@@ -223,11 +214,6 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
             logger.info(f"[Road] {d.class_name} | {d.severity.upper()} "
                         f"| conf={d.confidence:.2f} | area={d.area_px2}px²")
 
-        # if show_preview:
-        #     annotated = detector.annotate(frame, dets)
-        #     cv2.imshow("Road Damage Detector", annotated)
-        #     if cv2.waitKey(1) & 0xFF == ord('q'):
-        #         stop.set()
         if show_preview:
             annotated = detector.annotate(frame, dets)
             with _preview_lock:
@@ -309,6 +295,17 @@ def main():
     # ── Instantiate modules ───────────────────────────────────────────────────
     db      = DatabaseManager(cfg["database"])
     gps     = GPSReader(cfg["gps"])
+    # Startup validation
+    import os as _os
+    _model = cfg.get("road", {}).get("model_path", "models/yolov8n_rdd_india.pt")
+    if not _os.path.exists(_model):
+        logger.error(f"Road model not found: {_model} — check models/ folder")
+        return
+    _db_dir = _os.path.dirname(cfg.get("database", {}).get("path", "data/logs/events.db"))
+    if _db_dir and not _os.path.exists(_db_dir):
+        _os.makedirs(_db_dir, exist_ok=True)
+    logger.info("Startup validation passed ✓")
+
     dms     = DriverMonitor(cfg["dms"], draw_overlays=args.preview)
     road    = RoadDamageDetector(cfg["road"])
     voice   = VoiceAlert(cfg=cfg)
@@ -394,11 +391,6 @@ def main():
     signal.signal(signal.SIGTERM, _shutdown)
 
     logger.info("Press Ctrl+C to stop")
-    # try:
-    #     while not stop.is_set():
-    #         time.sleep(0.5)
-    # except KeyboardInterrupt:
-    #     stop.set()
     try:
         while not stop.is_set():
             if args.preview:
@@ -419,6 +411,8 @@ def main():
     if road_writer is not None:
         road_writer.release()
         logger.info("[Record] Road footage saved ✓")
+    dms.stop()       # closes MediaPipe face mesh
+    if prox: prox.stop()
     dms_cam.stop()
     road_cam.stop()
     gps.stop()
