@@ -68,5 +68,7 @@ class TestDetectionDataclass:
 
     def test_class_names_map(self, detector):
         assert detector.CLASS_NAMES[0] == "pothole"
-        assert detector.CLASS_NAMES[1] == "crack"
-        assert detector.CLASS_NAMES[2] == "rutting"
+        assert detector.CLASS_NAMES[1] == "crack_longitudinal"
+        assert detector.CLASS_NAMES[2] == "crack_transverse"
+        assert detector.CLASS_NAMES[3] == "rutting"
+        assert detector.CLASS_NAMES[4] == "repair"
