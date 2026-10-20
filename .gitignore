@@ -34,4 +34,4 @@ Thumbs.db
 # Archives
 *.zip
 *.rar
-data/logs/*.db-
+data/logs/*.db-*
