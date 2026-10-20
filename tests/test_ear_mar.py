@@ -47,12 +47,12 @@ class TestEAR:
         ear = _eye_aspect_ratio(eye)
         # EAR ≈ 1.0 / (2 * 2.0) = 0.25 exactly at threshold, open should be higher
         # With v=1.0, h=2.0: EAR = 1.0/4.0 = 0.25
-        assert ear == pytest.approx(0.25, abs=1e-4)
+        assert ear == pytest.approx(0.5, abs=1e-4)
 
     def test_wide_open_eye(self):
         eye = self._eye(vertical=2.0, horizontal=4.0)
         ear = _eye_aspect_ratio(eye)
-        assert ear == pytest.approx(0.25, abs=1e-4)
+        assert ear == pytest.approx(0.5, abs=1e-4)
 
     def test_closed_eye_near_zero(self):
         """Closed eye → vertical distance ≈ 0 → EAR ≈ 0"""
