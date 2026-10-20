@@ -61,9 +61,11 @@ class DMSResult:
     yawn_frames: int = 0
     head_frames: int = 0          # NEW: consecutive frames of head deviation
     risk: str = "low"             # "low" | "moderate" | "high"
-    driver_state: str = "ALERT"   # "ALERT" | "FATIGUED" | "DROWSY" | "DISTRACTED"
+    driver_state: str = "ALERT"   # "ALERT" | "FATIGUED" | "DROWSY" | "DISTRACTED" | "LOW VISIBILITY"
     alert_info: str = ""
     face_detected: bool = False
+    visibility: str = "good"      # "good" | "low_light"
+    brightness: float = 0.0       # mean frame luminance (0-255)
     annotated_frame: Optional[np.ndarray] = None
 
 
@@ -101,6 +103,17 @@ class DriverMonitor:
         # BUG 1 FIX: frames of sustained head deviation required for DISTRACTED
         # Configurable via head_pose.consec_frames (default 8 = ~267ms at 30fps)
         self._CONSEC_HEAD = cfg.get("head_pose", {}).get("consec_frames", 8)
+
+        # ── Low-light handling ──────────────────────────────────────────────────
+        # Only activates on dark frames; bright/daylight frames are untouched.
+        # Boosts contrast (CLAHE) so face detection survives night / NoIR-IR input.
+        _ll = cfg.get("low_light", {})
+        self.ll_enabled   = _ll.get("enabled", True)
+        self.ll_threshold = _ll.get("brightness_threshold", 60)   # mean luma 0-255
+        self._clahe = cv2.createCLAHE(
+            clipLimit=_ll.get("clahe_clip", 2.0),
+            tileGridSize=(_ll.get("clahe_grid", 8), _ll.get("clahe_grid", 8)),
+        )
 
         # ── Models (lazy-loaded in start()) ───────────────────────────────────
         self._dlib_detector  = None
@@ -203,10 +216,18 @@ class DriverMonitor:
         result = DMSResult(annotated_frame=annotated)
         h, w = frame.shape[:2]
 
+        # ── Low-light check (cheap) — only dark frames get enhanced ─────────────
+        # Daylight path is unchanged: det_frame stays the original frame.
+        brightness = float(frame.mean())
+        low_light  = self.ll_enabled and brightness < self.ll_threshold
+        det_frame  = self._enhance_low_light(frame) if low_light else frame
+        result.brightness = round(brightness, 1)
+        result.visibility = "low_light" if low_light else "good"
+
         # PERF: grayscale is only needed by dlib; skip it in mediapipe-only mode
         gray = None
         if self._dlib_detector and self._dlib_predictor:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(det_frame, cv2.COLOR_BGR2GRAY)
 
         ear, mar = 0.0, 0.0
         yaw, pitch, roll = 0.0, 0.0, 0.0
@@ -227,7 +248,7 @@ class DriverMonitor:
 
         # ── Try mediapipe ─────────────────────────────────────────────────────
         if self._mp_face_mesh:
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb = cv2.cvtColor(det_frame, cv2.COLOR_BGR2RGB)
             mp_result = self._mp_face_mesh.process(rgb)
             if mp_result.multi_face_landmarks:
                 face_found = True
@@ -347,6 +368,14 @@ class DriverMonitor:
             self._eye_counter, self._yawn_counter, self._head_counter
         )
 
+        # ── Low-visibility override ─────────────────────────────────────────────
+        # If the face is lost AND the frame is dark, don't report a false "ALERT"
+        # all-clear. Surface that detection is degraded instead. Risk stays low
+        # (the driver's true state is unknown), but the state is honest.
+        if not face_found and low_light:
+            state = "LOW VISIBILITY"
+            info  = "Low light — face not detected, detection degraded"
+
         # ── Build result ──────────────────────────────────────────────────────
         result.ear               = round(ear,   3)
         result.mar               = round(mar,   3)
@@ -368,6 +397,18 @@ class DriverMonitor:
         return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _enhance_low_light(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Boost contrast on dark frames so face detection survives low light.
+        CLAHE is applied only to the L (luminance) channel, leaving colour
+        intact. Called only when a frame is below the brightness threshold,
+        so daylight frames never pass through here.
+        """
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        l = self._clahe.apply(l)
+        return cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
 
     def _classify_risk(
         self, ear, mar, yaw, pitch, ecf, yf, hcf
@@ -440,6 +481,11 @@ class DriverMonitor:
 
         cv2.putText(frame, calib_text, (frame.shape[1] - 70, 18),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.42, calib_color, 1, cv2.LINE_AA)
+
+        # Low-light indicator — only shown on dark frames
+        if r.visibility == "low_light":
+            cv2.putText(frame, "LOW LIGHT", (frame.shape[1] - 160, 18),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 165, 255), 1, cv2.LINE_AA)
 
     @property
     def latest(self) -> DMSResult:
