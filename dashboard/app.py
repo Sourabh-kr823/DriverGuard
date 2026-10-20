@@ -59,6 +59,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
   border-bottom:3px solid #f97316;letter-spacing:.5px}
 .prox-strip.show{display:block}
 .prox-source{font-size:9px;opacity:.65;margin-left:8px;text-transform:uppercase}
+.lowvis-strip{display:none;background:#eef2ff;color:#3730a3;font-family:var(--font-mono);
+  font-size:11px;font-weight:bold;text-align:center;padding:6px 14px;
+  border-bottom:3px solid #6366f1;letter-spacing:.5px}
+.lowvis-strip.show{display:block}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 .main{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px}
 .panel{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;
@@ -184,6 +188,8 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   <span id="prox-msg">⚠ ROAD HAZARD AHEAD</span>
   <span class="prox-source" id="prox-source" style="font-size:9px;opacity:.7;margin-left:8px;text-transform:uppercase"></span>
 </div>
+
+<div class="lowvis-strip" id="lowvis-strip"></div>
 
 <div class="main">
   <!-- DMS Panel with circular gauge -->
@@ -392,6 +398,17 @@ socket.on("vsm_update", data => {
     data.risk_level === "moderate" ? "var(--amber)" : "var(--teal)";
   updateGauge(data.risk_score || 0, data.risk_level);
   $("alert-strip").className = "alert-strip" + (data.risk_level === "high" ? " show" : "");
+
+  // Low-visibility banner — shows when the cabin is too dark for reliable monitoring
+  const lv = $("lowvis-strip");
+  if (data.visibility === "low_light") {
+    lv.textContent = data.driver_state === "LOW VISIBILITY"
+      ? "🌙 LOW VISIBILITY — face not detected in low light. Driver monitoring is degraded."
+      : "🌙 Low light detected — driver monitoring may be less accurate.";
+    lv.classList.add("show");
+  } else {
+    lv.classList.remove("show");
+  }
   const dl = $("det-list");
   dl.innerHTML = "";
   if (!data.road_detections || !data.road_detections.length) {
