@@ -33,6 +33,11 @@ dms:
     ear: 0.45
     mar: 0.25
     head: 0.30
+  low_light:
+    enabled: true
+    brightness_threshold: 60   
+    clahe_clip: 2.0
+    clahe_grid: 8
 
 road:
   model_path: "models/yolov8n_rdd_india.pt"
