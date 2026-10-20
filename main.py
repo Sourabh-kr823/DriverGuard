@@ -46,6 +46,7 @@ from backend.alert.alert_manager    import AlertManager
 from dashboard.app                  import create_app
 from backend.road.proximity_alert   import ProximityAlertManager
 from backend.alert.voice_alert       import VoiceAlert
+from utils.watchdog                  import Watchdog
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -114,41 +115,48 @@ class CameraCapture:
 
 def dms_thread(dms: DriverMonitor, cam: CameraCapture,
                alert: AlertManager, db: DatabaseManager,
-               show_preview: bool, stop: threading.Event):
+               show_preview: bool, stop: threading.Event, wd=None):
     """Driver Monitoring System loop."""
     logger.info("[DMS] Pipeline thread started")
     prev_risk  = "low"
-    frame_skip = 0
 
     _target_dt = 1 / 30   # aim for 30 FPS
     while not stop.is_set():
         _t0 = time.time()
-        frame = cam.read()
-        if frame is None:
-            time.sleep(0.033)
-            continue
+        # A single bad frame or transient model error must not kill the thread.
+        try:
+            if wd is not None:
+                wd.heartbeat("DMS")
 
-        result = dms.process(frame)
+            frame = cam.read()
+            if frame is None:
+                time.sleep(0.033)
+                continue
 
-        # Log on risk change
-        if result.risk != prev_risk:
-            db.log_driver_event(
-                ear=result.ear, mar=result.mar,
-                yaw=result.yaw, pitch=result.pitch,
-                risk=result.risk, state=result.driver_state,
-                eye_frames=result.eye_closed_frames,
-                yawn_frames=result.yawn_frames,
-                lat=alert.state.lat, lon=alert.state.lon,
-            )
-            prev_risk = result.risk
-            logger.info(f"[DMS] Risk change → {result.risk.upper()} "
-                        f"| State: {result.driver_state} "
-                        f"| EAR: {result.ear:.2f} MAR: {result.mar:.2f}")
+            result = dms.process(frame)
 
-        if show_preview:
-            display = result.annotated_frame if result.annotated_frame is not None else frame
-            with _preview_lock:
-                _preview_frames["dms"] = display
+            # Log on risk change
+            if result.risk != prev_risk:
+                db.log_driver_event(
+                    ear=result.ear, mar=result.mar,
+                    yaw=result.yaw, pitch=result.pitch,
+                    risk=result.risk, state=result.driver_state,
+                    eye_frames=result.eye_closed_frames,
+                    yawn_frames=result.yawn_frames,
+                    lat=alert.state.lat, lon=alert.state.lon,
+                )
+                prev_risk = result.risk
+                logger.info(f"[DMS] Risk change → {result.risk.upper()} "
+                            f"| State: {result.driver_state} "
+                            f"| EAR: {result.ear:.2f} MAR: {result.mar:.2f}")
+
+            if show_preview:
+                display = result.annotated_frame if result.annotated_frame is not None else frame
+                with _preview_lock:
+                    _preview_frames["dms"] = display
+        except Exception as e:
+            logger.error(f"[DMS] frame error (recovered, thread alive): {e}")
+            time.sleep(0.05)
 
         # PERF: adaptive sleep — only wait for the remaining time in the frame budget
         _elapsed = time.time() - _t0
@@ -160,7 +168,7 @@ def dms_thread(dms: DriverMonitor, cam: CameraCapture,
 def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
                 alert: AlertManager, db: DatabaseManager,
                 show_preview: bool, stop: threading.Event,
-                writer: cv2.VideoWriter = None):
+                writer: cv2.VideoWriter = None, wd=None):
     logger.info("[Road] Pipeline thread started")
     _target_dt = 1 / 30
     # Fix 2: track last logged event per class to avoid duplicate DB entries
@@ -171,53 +179,61 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
 
     while not stop.is_set():
         _t0 = time.time()
-        frame = cam.read()
-        if frame is None:
-            time.sleep(0.033)
-            continue
+        # A single bad frame or transient YOLO error must not kill the thread.
+        try:
+            if wd is not None:
+                wd.heartbeat("Road")
 
-        # Save raw frame to recording if enabled
-        if writer is not None:
-            writer.write(frame)
+            frame = cam.read()
+            if frame is None:
+                time.sleep(0.033)
+                continue
 
-        gps = alert.state
-        dets = detector.process(frame, lat=gps.lat, lon=gps.lon)
+            # Save raw frame to recording if enabled
+            if writer is not None:
+                writer.write(frame)
 
-        now = time.time()
-        for d in dets:
-            prev = _last_logged.get(d.class_name)
-            if prev is not None:
-                elapsed = now - prev[0]
-                if elapsed < _MIN_LOG_INTERVAL:
-                    # same class seen recently — skip unless far enough away
-                    if d.lat and prev[1]:
-                        dlat = math.radians(d.lat - prev[1])
-                        dlon = math.radians((d.lon or 0) - (prev[2] or 0))
-                        a = (math.sin(dlat/2)**2 +
-                             math.cos(math.radians(prev[1])) *
-                             math.cos(math.radians(d.lat)) *
-                             math.sin(dlon/2)**2)
-                        dist_m = 6_371_000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-                        if dist_m < _MIN_LOG_DISTANCE:
+            gps = alert.state
+            dets = detector.process(frame, lat=gps.lat, lon=gps.lon)
+
+            now = time.time()
+            for d in dets:
+                prev = _last_logged.get(d.class_name)
+                if prev is not None:
+                    elapsed = now - prev[0]
+                    if elapsed < _MIN_LOG_INTERVAL:
+                        # same class seen recently — skip unless far enough away
+                        if d.lat and prev[1]:
+                            dlat = math.radians(d.lat - prev[1])
+                            dlon = math.radians((d.lon or 0) - (prev[2] or 0))
+                            a = (math.sin(dlat/2)**2 +
+                                 math.cos(math.radians(prev[1])) *
+                                 math.cos(math.radians(d.lat)) *
+                                 math.sin(dlon/2)**2)
+                            dist_m = 6_371_000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+                            if dist_m < _MIN_LOG_DISTANCE:
+                                continue
+                        else:
                             continue
-                    else:
-                        continue
 
-            _last_logged[d.class_name] = (now, d.lat, d.lon)
-            db.log_road_event(
-                class_name=d.class_name,
-                confidence=d.confidence,
-                severity=d.severity,
-                area_px2=d.area_px2,
-                lat=d.lat, lon=d.lon,
-            )
-            logger.info(f"[Road] {d.class_name} | {d.severity.upper()} "
-                        f"| conf={d.confidence:.2f} | area={d.area_px2}px²")
+                _last_logged[d.class_name] = (now, d.lat, d.lon)
+                db.log_road_event(
+                    class_name=d.class_name,
+                    confidence=d.confidence,
+                    severity=d.severity,
+                    area_px2=d.area_px2,
+                    lat=d.lat, lon=d.lon,
+                )
+                logger.info(f"[Road] {d.class_name} | {d.severity.upper()} "
+                            f"| conf={d.confidence:.2f} | area={d.area_px2}px²")
 
-        if show_preview:
-            annotated = detector.annotate(frame, dets)
-            with _preview_lock:
-                _preview_frames["road"] = annotated
+            if show_preview:
+                annotated = detector.annotate(frame, dets)
+                with _preview_lock:
+                    _preview_frames["road"] = annotated
+        except Exception as e:
+            logger.error(f"[Road] frame error (recovered, thread alive): {e}")
+            time.sleep(0.05)
 
         _elapsed = time.time() - _t0
         _sleep   = _target_dt - _elapsed
@@ -227,17 +243,22 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
 
 def alert_sync_thread(alert: AlertManager, dms: DriverMonitor,
                       road: RoadDamageDetector, gps: GPSReader,
-                      stop: threading.Event, prox=None):
+                      stop: threading.Event, prox=None, wd=None):
     """Syncs DMS + road results into AlertManager at 10 Hz."""
     while not stop.is_set():
-        fix = gps.latest
-        alert.update(
-            dms_result      = dms.latest,
-            road_detections = road.latest,
-            gps_fix         = fix,
-        )
-        if prox is not None:
-            prox.update_gps(fix)
+        try:
+            if wd is not None:
+                wd.heartbeat("AlertSync")
+            fix = gps.latest
+            alert.update(
+                dms_result      = dms.latest,
+                road_detections = road.latest,
+                gps_fix         = fix,
+            )
+            if prox is not None:
+                prox.update_gps(fix)
+        except Exception as e:
+            logger.error(f"[AlertSync] update error (recovered, thread alive): {e}")
         time.sleep(0.1)
 
 # ─── Shared preview frames ────────────────────────────────────────────────────
@@ -353,20 +374,34 @@ def main():
     db.log_system("INFO", "Driver Guard system started")
     logger.success("All modules online ✓")
 
-    # ── Launch threads ────────────────────────────────────────────────────────
-    threads = [
+    # ── Launch threads under a watchdog ───────────────────────────────────────
+    # The watchdog restarts any pipeline thread that dies or stops sending
+    # heartbeats (e.g. a hang), so the system self-heals when running unattended.
+    wd = Watchdog(timeout_sec=8, check_interval=2)
+
+    def _spawn_dms():
         threading.Thread(target=dms_thread,
-            args=(dms, dms_cam, alert, db, args.preview, stop),
-            daemon=True, name="DMSPipeline"),
+            args=(dms, dms_cam, alert, db, args.preview, stop, wd),
+            daemon=True, name="DMSPipeline").start()
+
+    def _spawn_road():
         threading.Thread(target=road_thread,
-            args=(road, road_cam, alert, db, args.preview, stop, road_writer),
-            daemon=True, name="RoadPipeline"),
+            args=(road, road_cam, alert, db, args.preview, stop, road_writer, wd),
+            daemon=True, name="RoadPipeline").start()
+
+    def _spawn_sync():
         threading.Thread(target=alert_sync_thread,
-            args=(alert, dms, road, gps, stop, prox),
-            daemon=True, name="AlertSync"),
-    ]
-    for t in threads:
-        t.start()
+            args=(alert, dms, road, gps, stop, prox, wd),
+            daemon=True, name="AlertSync").start()
+
+    wd.register("DMS",       restart_fn=_spawn_dms,  timeout_sec=8)
+    wd.register("Road",      restart_fn=_spawn_road, timeout_sec=8)
+    wd.register("AlertSync", restart_fn=_spawn_sync, timeout_sec=5)
+
+    _spawn_dms()
+    _spawn_road()
+    _spawn_sync()
+    wd.start()
 
     # ── Web dashboard ─────────────────────────────────────────────────────────
     if not args.no_web:
@@ -408,6 +443,7 @@ def main():
         stop.set()
 
     logger.info("Stopping modules …")
+    wd.stop()        # stop the watchdog first so it doesn't restart threads mid-shutdown
     if road_writer is not None:
         road_writer.release()
         logger.info("[Record] Road footage saved ✓")
