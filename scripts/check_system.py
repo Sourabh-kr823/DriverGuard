@@ -156,26 +156,33 @@ section("5. YOLOv8 Road Model Inference")
 
 try:
     from ultralytics import YOLO
+    import torch, numpy as np
+
+    device   = 0 if torch.cuda.is_available() else "cpu"
+    dev_name = "GPU" if device == 0 else "CPU"
+
     t0 = time.time()
     model = YOLO(model_path)
+    model.to(device)
     load_ms = int((time.time() - t0) * 1000)
-    check("YOLOv8 model load", True, f"{load_ms}ms")
+    check("YOLOv8 model load", True, f"{load_ms}ms on {dev_name}")
 
-    import numpy as np
     blank = np.zeros((640, 640, 3), dtype=np.uint8)
+    model(blank, verbose=False, device=device)          # warm-up (not timed)
     t0 = time.time()
-    model(blank, verbose=False)
-    inf_ms = int((time.time() - t0) * 1000)
+    model(blank, verbose=False, device=device)          # timed run
+    inf_ms  = int((time.time() - t0) * 1000)
     fps_est = round(1000 / inf_ms) if inf_ms > 0 else 0
 
     check("YOLOv8 inference test", True,
-          f"{inf_ms}ms/frame  (~{fps_est} FPS road pipeline)")
+          f"{inf_ms}ms/frame on {dev_name}  (~{fps_est} FPS road pipeline)")
 
     if inf_ms > 100:
-        check("YOLOv8 speed",
-              False, f"{inf_ms}ms is slow — GPU not used or Pi 5 expected", warn=True)
+        reason = "CUDA not available, running on CPU" if device == "cpu" \
+                 else f"slow even on {dev_name} — check GPU load"
+        check("YOLOv8 speed", False, f"{inf_ms}ms — {reason}", warn=True)
     else:
-        check("YOLOv8 speed", True, "fast enough for real-time")
+        check("YOLOv8 speed", True, f"fast enough for real-time on {dev_name}")
 except Exception as e:
     check("YOLOv8", False, str(e))
 
