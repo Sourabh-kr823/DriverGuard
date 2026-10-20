@@ -91,36 +91,60 @@ All detections are fused into a risk score, logged to SQLite, and streamed to a 
 
 ```
 DriverGuard/
-├── main.py                    # Entry point
-├── config.yaml                # All thresholds and settings
-├── finetune_india.py          # Road model fine-tuning script
-├── merge_datasets.py          # Dataset merger with class remapping
-├── test_images.py             # Demo tool for image/video testing
-├── requirements.txt           # Python dependencies
+├── main.py                      # Entry point
+├── config.yaml                  # All thresholds and settings
+├── requirements.txt             # Python dependencies
+├── pytest.ini                   # Test configuration
+├── Dockerfile · docker-compose.yml · *.service   # Deployment
 │
-├── backend/
+├── backend/                     # All pipeline logic
 │   ├── dms/
-│   │   ├── driver_monitor.py  # DMS pipeline orchestrator
-│   │   ├── ear_mar.py         # EAR + MAR computation (6-pt formula)
-│   │   └── head_pose.py       # Yaw/pitch estimation
+│   │   ├── driver_monitor.py    # DMS pipeline orchestrator
+│   │   ├── ear_mar.py           # EAR + MAR computation (6-pt formula)
+│   │   └── head_pose.py         # Yaw/pitch estimation
 │   ├── road/
-│   │   └── detector.py        # YOLOv8 road damage pipeline
+│   │   ├── detector.py          # YOLOv8 road damage pipeline
+│   │   └── proximity_alert.py   # GPS proximity hazard alerts
 │   ├── gps/
-│   │   └── gps_reader.py      # NEO-6M serial + simulation
+│   │   └── gps_reader.py        # NEO-6M serial + simulation
 │   ├── alert/
-│   │   └── alert_manager.py   # Risk fusion + alert logic
+│   │   ├── alert_manager.py     # Risk fusion + alert logic
+│   │   └── voice_alert.py       # Dual-voice TTS alerts
 │   └── database/
-│       └── db_manager.py      # SQLite WAL logger
+│       └── db_manager.py        # SQLite WAL logger
 │
 ├── dashboard/
-│   └── app.py                 # Flask + Socket.IO dashboard
+│   └── app.py                   # Flask + Socket.IO dashboard
+│
+├── utils/                       # Standalone, reusable helpers
+│   ├── risk_score.py            # Stateless risk-score math
+│   └── watchdog.py              # Thread watchdog / auto-restart
+│
+├── scripts/                     # Dev, dataset & training tools
+│   ├── finetune_india.py        # Road model fine-tuning
+│   ├── train_local.py           # Road model training
+│   ├── train_road.py            # Road model training
+│   ├── merge_datasets.py        # Dataset merger with class remapping
+│   ├── convert_rdd2022.py       # RDD2022 format converter
+│   ├── annotate_india_frames.py # Frame annotation helper
+│   ├── check_system.py          # Pre-flight system check
+│   ├── check_cameras.py         # Camera enumeration check
+│   ├── check_all_datasets.py    # Dataset verification
+│   ├── calibrate_camera.py      # Camera calibration
+│   ├── inject_test.py           # Inject test hazard data
+│   ├── clear_db.py              # Clear the SQLite DB
+│   └── test_images.py           # Demo tool for image/video testing
+│
+├── tests/                       # pytest suite (49 tests)
+│   └── test_*.py
 │
 ├── models/
-│   ├── yolov8n_rdd_india.pt   # Road damage model — included in repo (6.2MB)
-│   └── README.md              # Model setup instructions
+│   ├── yolov8n_rdd_india.pt     # Road damage model — included in repo (6.2MB)
+│   └── README.md                # Model setup instructions
 │
+├── assets/                      # alert.wav and static assets
 └── data/
-    └── logs/                  # SQLite DB + session logs (not tracked)
+    └── logs/                    # SQLite DB + session logs (not tracked)
 ```
 
 ---
@@ -171,7 +195,10 @@ python main.py --simulate --preview
 python main.py --simulate --preview --record
 
 # Test detection on images or video
-python test_images.py --source path/to/image_or_video
+python scripts/test_images.py --source path/to/image_or_video
+
+# Inject test hazard data (imports backend, so run as a module)
+python -m scripts.inject_test
 ```
 
 Open `http://localhost:5000` in your browser for the live dashboard.
@@ -198,10 +225,10 @@ cameras:
 ### Fine-tuning on India road footage
 ```bash
 # After collecting road test footage and labelling on Roboflow:
-python finetune_india.py
+python scripts/finetune_india.py
 
 # Optional args
-python finetune_india.py --epochs 75 --batch 4 --device 0
+python scripts/finetune_india.py --epochs 75 --batch 4 --device 0
 ```
 
 ---
