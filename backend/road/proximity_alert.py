@@ -1,5 +1,5 @@
 """
-modules/road/proximity_alert.py
+backend/road/proximity_alert.py
 ────────────────────────────────
 Predictive Road Hazard Alert System
 
@@ -15,7 +15,7 @@ Layer 2 — OpenStreetMap Road Surface (internet needed, gracefully skipped)
 
 Usage
 -----
-    from modules.road.proximity_alert import ProximityAlertManager
+    from backend.road.proximity_alert import ProximityAlertManager
 
     prox = ProximityAlertManager(db_manager, cfg=cfg)
     prox.start()

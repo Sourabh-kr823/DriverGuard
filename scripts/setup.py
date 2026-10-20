@@ -27,9 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 DIRS = [
     "models", "data/logs", "assets",
-    "modules/dms", "modules/road",
-    "modules/gps", "modules/database",
-    "modules/alert", "dashboard", "utils",
+    "backend/dms", "backend/road",
+    "backend/gps", "backend/database",
+    "backend/alert", "dashboard", "utils",
 ]
 
 DLIB_URL  = ("http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2")

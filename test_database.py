@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modules.database.db_manager import DatabaseManager
+from backend.database.db_manager import DatabaseManager
 
 
 @pytest.fixture

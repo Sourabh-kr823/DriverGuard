@@ -1,5 +1,5 @@
 """
-modules/gps/gps_reader.py
+backend/gps/gps_reader.py
 ──────────────────────────
 Serial reader for u-blox NEO-6M GPS module.
 

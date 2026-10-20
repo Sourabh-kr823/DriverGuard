@@ -1,11 +1,11 @@
 """
-modules/dms/driver_monitor.py
+backend/dms/driver_monitor.py
 ──────────────────────────────
 DriverMonitor — real-time per-frame DMS pipeline.
 
 Usage
 -----
-    from modules.dms.driver_monitor import DriverMonitor
+    from backend.dms.driver_monitor import DriverMonitor
 
     dms = DriverMonitor(cfg["dms"])
     dms.start()

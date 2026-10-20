@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modules.dms.ear_mar import (
+from backend.dms.ear_mar import (
     _eye_aspect_ratio,
     _mouth_aspect_ratio,
     compute_ear_mar,

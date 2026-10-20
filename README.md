@@ -98,7 +98,7 @@ DriverGuard/
 ├── test_images.py             # Demo tool for image/video testing
 ├── requirements.txt           # Python dependencies
 │
-├── modules/
+├── backend/
 │   ├── dms/
 │   │   ├── driver_monitor.py  # DMS pipeline orchestrator
 │   │   ├── ear_mar.py         # EAR + MAR computation (6-pt formula)

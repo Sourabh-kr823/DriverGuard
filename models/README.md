@@ -43,5 +43,5 @@ This folder contains the AI model files used by DriverGuard.
 ### shape_predictor_68_face_landmarks.dat
 - **Source**: dlib library (Davis King, 2014)
 - **Purpose**: 68-point facial landmark detection for DMS pipeline
-- **Used by**: `modules/dms/driver_monitor.py` when backend = "dlib" or "both"
+- **Used by**: `backend/dms/driver_monitor.py` when backend = "dlib" or "both"
 - **Note**: System works without this file when using `backend: mediapipe` in config.yaml

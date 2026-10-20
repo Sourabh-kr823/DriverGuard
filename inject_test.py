@@ -1,4 +1,4 @@
-from modules.database.db_manager import DatabaseManager
+from backend.database.db_manager import DatabaseManager
 import yaml, time
 
 cfg = yaml.safe_load(open('config.yaml'))

@@ -1,5 +1,5 @@
 """
-modules/alert/alert_manager.py
+backend/alert/alert_manager.py
 ───────────────────────────────
 Alert Manager — central hub that:
 

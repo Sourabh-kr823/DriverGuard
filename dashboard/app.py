@@ -17,8 +17,8 @@ from flask import Flask, jsonify, render_template_string, Response
 from flask_socketio import SocketIO
 
 if TYPE_CHECKING:
-    from modules.alert.alert_manager import AlertManager
-    from modules.database.db_manager import DatabaseManager
+    from backend.alert.alert_manager import AlertManager
+    from backend.database.db_manager import DatabaseManager
 
 
 _DASHBOARD_HTML = """<!DOCTYPE html>

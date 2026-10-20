@@ -38,14 +38,14 @@ from loguru import logger
 
 
 # ── Internal modules ──────────────────────────────────────────────────────────
-from modules.dms.driver_monitor     import DriverMonitor
-from modules.road.detector          import RoadDamageDetector
-from modules.gps.gps_reader         import GPSReader
-from modules.database.db_manager    import DatabaseManager
-from modules.alert.alert_manager    import AlertManager
+from backend.dms.driver_monitor     import DriverMonitor
+from backend.road.detector          import RoadDamageDetector
+from backend.gps.gps_reader         import GPSReader
+from backend.database.db_manager    import DatabaseManager
+from backend.alert.alert_manager    import AlertManager
 from dashboard.app                  import create_app
-from modules.road.proximity_alert   import ProximityAlertManager
-from modules.alert.voice_alert       import VoiceAlert
+from backend.road.proximity_alert   import ProximityAlertManager
+from backend.alert.voice_alert       import VoiceAlert
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 """
-modules/road/detector.py
+backend/road/detector.py
 ─────────────────────────
 Road damage detection using YOLOv8-nano fine-tuned on RDD2022 +
 1 200 custom-annotated Indian road frames.

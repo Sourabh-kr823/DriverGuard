@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modules.road.detector import RoadDamageDetector, Detection
+from backend.road.detector import RoadDamageDetector, Detection
 
 
 @pytest.fixture

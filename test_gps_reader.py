@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modules.gps.gps_reader import GPSReader, GPSFix
+from backend.gps.gps_reader import GPSReader, GPSFix
 
 
 @pytest.fixture

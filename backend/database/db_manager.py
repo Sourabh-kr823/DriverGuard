@@ -1,5 +1,5 @@
 """
-modules/database/db_manager.py
+backend/database/db_manager.py
 ───────────────────────────────
 SQLite event logger for VSM.
 
