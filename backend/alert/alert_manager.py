@@ -49,6 +49,7 @@ class AlertState:
     pitch: float = 0.0
     eye_frames: int = 0
     yawn_frames: int = 0
+    visibility: str = "good"      # "good" | "low_light" — from DMS
     road_detections: list = field(default_factory=list)
     lat: Optional[float] = None
     lon: Optional[float] = None
@@ -201,6 +202,7 @@ class AlertManager:
                 pitch          = dms_result.pitch,
                 eye_frames     = dms_result.eye_closed_frames,
                 yawn_frames    = dms_result.yawn_frames,
+                visibility     = getattr(dms_result, "visibility", "good"),
                 road_detections= road_summary,
                 lat            = gps_fix.lat  if gps_fix else None,
                 lon            = gps_fix.lon  if gps_fix else None,
