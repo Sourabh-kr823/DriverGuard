@@ -877,17 +877,12 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
     app      = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
     push_interval = 1.0 / 10
-
-    # ── Session scope ─────────────────────────────────────────────────────
-    # Record the moment this session started; all DB queries are filtered to
-    # rows with ts_iso >= this value so historical data never bleeds in.
     session_start_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     logger.info(f"[Dashboard] Session start: {session_start_iso}")
 
     def _filter_session(rows: list) -> list:
         """Return only rows that belong to the current session."""
         return [r for r in rows if (r.get("ts_iso") or "") >= session_start_iso]
-    # ──────────────────────────────────────────────────────────────────────
 
     @app.route("/")
     def index():
@@ -1290,7 +1285,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
                 s   = alert_manager.state
                 msg = {k: v for k, v in s.__dict__.items() if k != "annotated_frame"}
                 socketio.emit("vsm_update", msg)
-                # Push proximity alert separately for targeted UI handling
                 if proximity_manager is not None:
                     pa = proximity_manager.latest_alert
                     socketio.emit("proximity_alert", pa or {})
