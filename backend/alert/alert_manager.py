@@ -17,13 +17,6 @@ Risk score formula (weighted, 0.0 – 1.0)
     Moderate score < 0.65
     High     score ≥ 0.65  (or eye_frames ≥ threshold)
 
-Usage
------
-    alert = AlertManager(cfg)
-    alert.start()
-
-    alert.update(dms_result, road_detections, gps_fix)
-    state = alert.state
 """
 
 import threading
@@ -32,9 +25,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from loguru import logger
-
-
-# ─── Shared state ─────────────────────────────────────────────────────────────
 
 @dataclass
 class AlertState:
@@ -85,9 +75,7 @@ class AlertManager:
         # Debounce: don't re-trigger audio within N seconds
         self._last_audio_ts = 0.0
         self._audio_cooldown = 4.0
-        self._voice = voice_alert   # VoiceAlert instance (optional)
-
-        # Proximity alert (set externally by ProximityAlertManager)
+        self._voice = voice_alert   
         self._proximity_alert: dict = {}
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -161,8 +149,6 @@ class AlertManager:
             ds = dms_result.driver_state
 
             if score >= 0.70:
-                # SEVERE tier: fast rate, full volume, female voice
-                # Text in caps = SAPI5 applies natural emphasis
                 self._voice.speak_driver(
                     "SEVERE ALERT! EXTREMELY HIGH RISK! Pull over immediately and rest!",
                     severe=True
@@ -262,7 +248,6 @@ class AlertManager:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def set_proximity_alert(self, alert: dict):
-        """Called by ProximityAlertManager to inject the current proximity alert."""
         with self._lock:
             self._proximity_alert = alert or {}
 
