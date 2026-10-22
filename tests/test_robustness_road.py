@@ -1,5 +1,4 @@
 """
-tests/test_robustness_road.py
 Road-detector edge cases: temporal confirmation + graceful behaviour with no model.
 """
 import numpy as np
@@ -41,6 +40,6 @@ class TestTemporalConfirmation:
 
 class TestNoModel:
     def test_process_without_model_returns_empty(self):
-        det = RoadDamageDetector(BASE)                       # start() not called -> no model
+        det = RoadDamageDetector(BASE)                       
         out = det.process(np.zeros((640, 640, 3), dtype=np.uint8))
         assert out == []
