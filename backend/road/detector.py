@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import time
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -117,6 +118,19 @@ class RoadDamageDetector:
         severity_cfg          = cfg.get("severity", {})
         self._minor_area_max  = severity_cfg.get("minor",    {}).get("area_px2_max", 3000)
         self._mod_area_max    = severity_cfg.get("moderate", {}).get("area_px2_max", 10000)
+
+        # ── Temporal confirmation ──────────────────────────────────────────────
+        # Require a hazard class to appear in `confirm_frames` of the last
+        # `confirm_window` frames before it is treated as real. Filters out
+        # single-frame false positives (shadows, tar seams, wet patches).
+        self.temporal_enabled = cfg.get("temporal_confirmation", True)
+        self.confirm_window   = max(1, int(cfg.get("confirm_window", 5)))
+        self.confirm_frames   = max(1, int(cfg.get("confirm_frames", 3)))
+        if self.confirm_frames > self.confirm_window:
+            self.confirm_frames = self.confirm_window
+            logger.warning("[Road] confirm_frames > confirm_window — clamped to window size")
+        # Each entry is the set of class_ids detected in that frame
+        self._frame_history: deque = deque(maxlen=self.confirm_window)
 
         self._model  = None
         self._device = "cpu"
@@ -202,9 +216,36 @@ class RoadDamageDetector:
                     lon        = lon,
                 ))
 
+        detections = self._apply_temporal(detections)
+
         with self._lock:
             self._latest = detections
         return detections
+
+    # ── Temporal confirmation ───────────────────────────────────────────────────
+
+    def _apply_temporal(self, detections: List[Detection]) -> List[Detection]:
+        """
+        Keep only hazards confirmed across multiple frames.
+
+        A detection survives when its class has been seen in at least
+        `confirm_frames` of the last `confirm_window` frames (this frame
+        included). One- or two-frame blips are dropped. Returns detections
+        unchanged when temporal_confirmation is off.
+        """
+        if not self.temporal_enabled:
+            return detections
+
+        seen_now = {d.class_id for d in detections}
+        self._frame_history.append(seen_now)
+
+        confirmed: List[Detection] = []
+        for d in detections:
+            hits = sum(1 for frame_classes in self._frame_history
+                       if d.class_id in frame_classes)
+            if hits >= self.confirm_frames:
+                confirmed.append(d)
+        return confirmed
 
     # ── Severity ──────────────────────────────────────────────────────────────
 
