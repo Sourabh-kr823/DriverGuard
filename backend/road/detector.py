@@ -20,7 +20,6 @@ Severity is determined by bounding-box area and confidence score:
     Minor    < 3 000 px²  or conf < 0.70
     Moderate < 10 000 px²
     Severe   ≥ 10 000 px²
-a
 """
 
 from __future__ import annotations
