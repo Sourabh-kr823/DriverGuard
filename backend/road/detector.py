@@ -21,14 +21,6 @@ Severity is determined by bounding-box area and confidence score:
     Moderate < 10 000 px²
     Severe   ≥ 10 000 px²
 
-Usage
------
-    detector = RoadDamageDetector(cfg["road"])
-    detector.start()
-
-    detections = detector.process(frame)
-    for d in detections:
-        print(d.class_name, d.severity, d.confidence)
 """
 
 from __future__ import annotations
@@ -160,18 +152,7 @@ class RoadDamageDetector:
     def process(self, frame: np.ndarray,
                 lat: Optional[float] = None,
                 lon: Optional[float] = None) -> List[Detection]:
-        """
-        Run inference on a single BGR frame.
-
-        Parameters
-        ----------
-        frame : np.ndarray  BGR image
-        lat, lon : GPS coordinates to geo-tag each detection
-
-        Returns
-        -------
-        List[Detection]
-        """
+        
         if self._model is None:
             return []
 
@@ -194,7 +175,6 @@ class RoadDamageDetector:
                 cls_id  = int(box.cls[0])
                 conf    = float(box.conf[0])
 
-                # ── Per-class confidence filter (runtime only) ──────────────
                 if self.use_per_class:
                     threshold = self.PER_CLASS_CONF.get(cls_id, self.conf_thr)
                     if conf < threshold:
@@ -227,11 +207,6 @@ class RoadDamageDetector:
     def _apply_temporal(self, detections: List[Detection]) -> List[Detection]:
         """
         Keep only hazards confirmed across multiple frames.
-
-        A detection survives when its class has been seen in at least
-        `confirm_frames` of the last `confirm_window` frames (this frame
-        included). One- or two-frame blips are dropped. Returns detections
-        unchanged when temporal_confirmation is off.
         """
         if not self.temporal_enabled:
             return detections
