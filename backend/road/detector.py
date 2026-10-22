@@ -20,7 +20,7 @@ Severity is determined by bounding-box area and confidence score:
     Minor    < 3 000 px²  or conf < 0.70
     Moderate < 10 000 px²
     Severe   ≥ 10 000 px²
-
+a
 """
 
 from __future__ import annotations
@@ -57,10 +57,7 @@ class Detection:
 class RoadDamageDetector:
     """
     YOLOv8-nano inference wrapper with severity classification.
-
-    Parameters
-    ----------
-    cfg : dict  — the `road` section from config.yaml
+    
     """
 
     CLASS_NAMES = {
@@ -175,6 +172,7 @@ class RoadDamageDetector:
                 cls_id  = int(box.cls[0])
                 conf    = float(box.conf[0])
 
+                # ── Per-class confidence filter (runtime only) ──────────────
                 if self.use_per_class:
                     threshold = self.PER_CLASS_CONF.get(cls_id, self.conf_thr)
                     if conf < threshold:
