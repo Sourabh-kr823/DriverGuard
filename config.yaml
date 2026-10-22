@@ -1,7 +1,3 @@
-# # ─────────────────────────────────────────────────────────
-# #  Driver Guard  |  config.yaml
-# # ─────────────────────────────────────────────────────────
-
 system:
   log_level: "DEBUG"
 
@@ -44,6 +40,9 @@ road:
   confidence_threshold: 0.50     # used when per_class_thresholds is false (paper benchmarks)
   iou_threshold: 0.35            # NEW: tighter NMS -> fewer duplicate boxes
   per_class_thresholds: true     # NEW: runtime per-class conf (pothole 0.35 ... repair 0.55)
+  temporal_confirmation: true    # NEW: require a hazard across several frames before it counts
+  confirm_frames: 3              # NEW: must appear in at least this many...
+  confirm_window: 5              # NEW: ...of the last this-many frames
   classes:
     0: "pothole"
     1: "crack_longitudinal"
