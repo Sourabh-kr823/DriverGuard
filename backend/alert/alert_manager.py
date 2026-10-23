@@ -1,5 +1,4 @@
 """
-backend/alert/alert_manager.py
 ───────────────────────────────
 Alert Manager — central hub that:
 
@@ -51,11 +50,6 @@ class AlertState:
 # ─── AlertManager ─────────────────────────────────────────────────────────────
 
 class AlertManager:
-    """
-    Parameters
-    ----------
-    cfg : dict  — full config dict (reads `dms.weights`, `alert`)
-    """
 
     def __init__(self, cfg: dict, voice_alert=None):
         self.weights     = cfg["dms"].get("weights", {"ear": 0.45, "mar": 0.25, "head": 0.30})
@@ -64,6 +58,11 @@ class AlertManager:
         self.audio_en    = self.alert_cfg.get("audio_alert", False)
         self.audio_file  = self.alert_cfg.get("audio_file", "assets/alert.wav")
         self.escalation  = self.alert_cfg.get("escalation_frames", 5)
+        _sr = self.alert_cfg.get("speed_risk", {})
+        self.speed_risk_enabled = _sr.get("enabled", True)
+        self.speed_low          = _sr.get("low_speed_kmh", 40)
+        self.speed_high         = _sr.get("high_speed_kmh", 80)
+        self.speed_max_factor   = _sr.get("max_factor", 1.35)
 
         self._state      = AlertState()
         self._lock       = threading.Lock()
@@ -113,16 +112,8 @@ class AlertManager:
     # ── Main update ───────────────────────────────────────────────────────────
 
     def update(self, dms_result, road_detections, gps_fix=None):
-        """
-        Called once per frame with latest DMS + road data.
-
-        Parameters
-        ----------
-        dms_result      : DMSResult
-        road_detections : List[Detection]
-        gps_fix         : GPSFix | None
-        """
-        score = self._compute_risk_score(dms_result)
+        raw   = self._compute_risk_score(dms_result)
+        score = min(1.0, raw * self._speed_factor(gps_fix))
         level = self._score_to_level(score, dms_result)
 
         # Road: severe pothole overrides to at least moderate
@@ -215,6 +206,17 @@ class AlertManager:
 
         w  = self.weights
         return (w["ear"] * ear_c + w["mar"] * mar_c + w["head"] * head_c)
+
+    def _speed_factor(self, gps_fix) -> float:
+        if not self.speed_risk_enabled or gps_fix is None:
+            return 1.0
+        speed = getattr(gps_fix, "speed_kmh", 0.0) or 0.0
+        if speed <= self.speed_low:
+            return 1.0
+        if speed >= self.speed_high:
+            return self.speed_max_factor
+        frac = (speed - self.speed_low) / (self.speed_high - self.speed_low)
+        return 1.0 + frac * (self.speed_max_factor - 1.0)
 
     def _score_to_level(self, score: float, r) -> str:
         if r.eye_closed_frames >= 15 or score >= 0.65:
