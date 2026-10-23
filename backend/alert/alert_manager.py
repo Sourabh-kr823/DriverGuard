@@ -6,16 +6,6 @@ Alert Manager — central hub that:
 2. Triggers audio / GPIO buzzer alerts.
 3. Emits real-time state to the web dashboard via a shared dict.
 
-Risk score formula (weighted, 0.0 – 1.0)
------------------------------------------
-    score = w_ear * ear_component
-           + w_mar * mar_component
-           + w_head * head_component
-
-    Low      score < 0.35
-    Moderate score < 0.65
-    High     score ≥ 0.65  (or eye_frames ≥ threshold)
-
 """
 
 import threading
@@ -38,7 +28,7 @@ class AlertState:
     pitch: float = 0.0
     eye_frames: int = 0
     yawn_frames: int = 0
-    visibility: str = "good"      # "good" | "low_light" — from DMS
+    visibility: str = "good"     
     road_detections: list = field(default_factory=list)
     lat: Optional[float] = None
     lon: Optional[float] = None
