@@ -1,12 +1,8 @@
-"""
-tests/test_robustness_alert.py
-Risk-fusion boundaries, missing GPS, and the severe-hazard override.
-"""
+
 from types import SimpleNamespace
 from backend.alert.alert_manager import AlertManager
 
 CFG = {"dms": {"weights": {"ear": 0.45, "mar": 0.25, "head": 0.30}}, "alert": {}}
-
 
 def _am():
     return AlertManager(CFG, voice_alert=None)
@@ -18,7 +14,6 @@ def _dms(ear=0.3, mar=0.1, yaw=0, pitch=0, ecf=0, yf=0, state="ALERT", vis="good
         eye_closed_frames=ecf, yawn_frames=yf,
         driver_state=state, visibility=vis,
     )
-
 
 class TestRiskBoundaries:
     def test_score_within_unit_range_for_extremes(self):
@@ -36,14 +31,12 @@ class TestRiskBoundaries:
         r = _dms(ear=0.1, ecf=20)
         assert am._score_to_level(am._compute_risk_score(r), r) == "high"
 
-
 class TestMissingGps:
     def test_none_gps_does_not_crash(self):
         am = _am()
         am.update(dms_result=_dms(), road_detections=[], gps_fix=None)
         assert am.state.lat is None
         assert am.state.speed_kmh == 0.0
-
 
 class TestSevereRoadOverride:
     def test_severe_hazard_bumps_level(self):
