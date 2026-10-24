@@ -24,7 +24,7 @@ dms:
   head_pose:
     yaw_limit: 30
     pitch_limit: 20
-    consec_frames: 8      # 8 fr = 267ms sustained deviation -> DISTRACTED
+    consec_frames: 8      
   weights:
     ear: 0.45
     mar: 0.25
@@ -99,5 +99,5 @@ alert:
 
 database:
   path: "data/logs/driver_guard_events.db"
-  flush_interval_sec: 5      # FIXED: was 'flush_interval' — db_manager expects 'flush_interval_sec'
+  flush_interval_sec: 5      
   max_rows_per_table: 50000a
