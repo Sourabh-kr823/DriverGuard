@@ -91,8 +91,13 @@ alert:
   risk_levels:
     low: 0.35
     moderate: 0.65
+  speed_risk:
+    enabled: true
+    low_speed_kmh: 40      # at/below this: no amplification
+    high_speed_kmh: 80     # at/above this: full amplification
+    max_factor: 1.35       # risk multiplier at high speed
 
 database:
   path: "data/logs/driver_guard_events.db"
   flush_interval_sec: 5      # FIXED: was 'flush_interval' — db_manager expects 'flush_interval_sec'
-  max_rows_per_table: 50000
+  max_rows_per_table: 50000a
