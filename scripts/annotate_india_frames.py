@@ -1,7 +1,4 @@
 """
-scripts/annotate_india_frames.py
-─────────────────────────────────
-Helper for annotating the 1 200 custom Indian road frames.
 
 What this script does
 ─────────────────────
@@ -9,9 +6,6 @@ What this script does
 2. Prepares a pre-configured LabelImg workspace with the correct
    class list (pothole, crack, rutting) and YOLO output mode
 3. Merges completed YOLO annotations into data/road_dataset/
-
-This script does NOT draw bounding boxes itself — it sets up the
-annotation environment so you can do it quickly in LabelImg.
 
 Recommended tool: LabelImg (fast, offline, YOLO-native)
     pip install labelImg
