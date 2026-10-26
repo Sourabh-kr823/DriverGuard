@@ -1,9 +1,5 @@
 """
-scripts/evaluate.py
 DriverGuard evaluation — only measured, defensible results:
-  1. Road-model validation  — mAP50, mAP50-95, per-class AP50/precision/recall
-  2. Inference benchmark     — ms/frame + FPS on GPU and CPU (the real speedup)
-  3. Test suite              — pytest pass/fail (correctness evidence)
 
 Run from the repo root:
     python scripts/evaluate.py
@@ -36,8 +32,6 @@ def load_config():
     p = ROOT / "config.yaml"
     return (yaml.safe_load(open(p)) or {}) if p.exists() else {}
 
-
-# ── Model load (shared by benchmark + validation) ───────────────────────────
 
 def load_model(model_path):
     try:
@@ -255,7 +249,6 @@ def main():
     print(f"\nSaved: {ROOT / 'evaluation_report.md'}")
     if charts:
         print("Charts: " + ", ".join(str(p) for p in charts))
-
 
 if __name__ == "__main__":
     main()
