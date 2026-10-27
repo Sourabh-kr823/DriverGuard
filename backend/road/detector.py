@@ -1,5 +1,4 @@
 """
-backend/road/detector.py
 ─────────────────────────
 Road damage detection using YOLOv8-nano fine-tuned on RDD2022 +
 1 200 custom-annotated Indian road frames.
@@ -33,6 +32,7 @@ from typing import List, Optional, Tuple
 import torch
 import cv2
 import numpy as np
+from pathlib import Path
 from loguru import logger
 
 
@@ -74,11 +74,6 @@ class RoadDamageDetector:
         "repair":             (180, 0, 220),    # purple
     }
 
-    # ── Per-class confidence thresholds (RUNTIME ONLY) ─────────────────────
-    # NOTE: These are for live deployment usability, NOT for mAP50 evaluation.
-    # For paper benchmarks, use a single uniform threshold across all classes.
-    # Rationale: potholes are safety-critical (catch more, lower threshold),
-    # repairs are non-critical (only flag if very confident, higher threshold).
     PER_CLASS_CONF = {
         0: 0.35,   # pothole           — catch more, safety critical
         1: 0.45,   # crack_longitudinal
@@ -95,8 +90,6 @@ class RoadDamageDetector:
     def __init__(self, cfg: dict):
         self.cfg        = cfg
         self.model_path = cfg["model_path"]
-        # Base conf is the LOWEST of all per-class thresholds so the model
-        # returns everything; we then filter per-class in process().
         self.conf_thr   = cfg.get("confidence_threshold", 0.50)
         self.iou_thr    = cfg.get("iou_threshold", 0.35)   # tighter NMS — fewer duplicate boxes
         # Runtime per-class filtering toggle (default on)
@@ -131,12 +124,22 @@ class RoadDamageDetector:
         logger.info(f"[Road] Loading YOLOv8 model: {self.model_path}")
         try:
             from ultralytics import YOLO
-            self._device = 0 if torch.cuda.is_available() else "cpu"
-            self._model  = YOLO(self.model_path)
-            self._model.to(self._device)
+            # NCNN model (an "_ncnn_model" folder) runs CPU-only, ARM-optimised —
+            # used on the Pi. A .pt model uses the GPU when one is available.
+            is_ncnn = (str(self.model_path).rstrip("/").endswith("_ncnn_model")
+                       or Path(self.model_path).is_dir())
+            if is_ncnn:
+                self._device = "cpu"
+                self._model  = YOLO(self.model_path, task="detect")
+                engine = "NCNN"
+            else:
+                self._device = 0 if torch.cuda.is_available() else "cpu"
+                self._model  = YOLO(self.model_path)
+                self._model.to(self._device)
+                engine = "PyTorch"
             dummy = np.zeros((640, 640, 3), dtype=np.uint8)
             self._model.predict(dummy, verbose=False, device=self._device)
-            logger.success(f"[Road] YOLOv8-nano loaded on {str(self._device).upper()} ✓")
+            logger.success(f"[Road] YOLOv8-nano loaded ({engine}) on {str(self._device).upper()} ✓")
         except FileNotFoundError:
             logger.warning(f"[Road] Model file not found: {self.model_path}. "
                            "Using dummy detections.")
@@ -151,9 +154,6 @@ class RoadDamageDetector:
         
         if self._model is None:
             return []
-
-        # Run model at the LOWEST threshold so nothing is pre-filtered,
-        # then apply per-class thresholds below.
         results = self._model.predict(
             frame,
             conf=self._base_conf,
