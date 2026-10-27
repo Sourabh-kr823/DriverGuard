@@ -1,21 +1,24 @@
 """
 DriverGuard evaluation — only measured, defensible results:
+  1. Road-model validation  — mAP50, mAP50-95, per-class AP50/precision/recall
+  2. Inference benchmark     — ms/frame + FPS (GPU+CPU for .pt, CPU for NCNN)
+  3. Test suite              — pytest pass/fail (correctness evidence)
 
 Run from the repo root:
     python scripts/evaluate.py
     python scripts/evaluate.py --no-val       # skip dataset validation
-    python scripts/evaluate.py --no-cpu       # skip the (slow) CPU benchmark
+    python scripts/evaluate.py --no-cpu       # skip the (slow) CPU benchmark (.pt only)
     python scripts/evaluate.py --no-tests
     python scripts/evaluate.py --device cpu
 
-Writes evaluation_report.md and PNG charts (per-class AP50, GPU-vs-CPU speed)
+Works with both the .pt model (GPU when available) and an exported NCNN model
+(a "_ncnn_model" folder, CPU-only). Writes evaluation_report.md and PNG charts
 when matplotlib is available. DMS drowsiness precision/recall needs labeled
 ground-truth video, which is not part of the logged data — this script does
 NOT fabricate a DMS accuracy figure.
 """
 
 import argparse
-import os
 import statistics
 import subprocess
 import sys
@@ -33,6 +36,23 @@ def load_config():
     return (yaml.safe_load(open(p)) or {}) if p.exists() else {}
 
 
+def is_ncnn(model_path):
+    return (str(model_path).rstrip("/").endswith("_ncnn_model")
+            or Path(model_path).is_dir())
+
+
+def model_size_mb(model_path):
+    mp = Path(model_path)
+    try:
+        if mp.is_dir():                      # NCNN folder — sum the .bin weights
+            size = sum(f.stat().st_size for f in mp.glob("*.bin"))
+        else:
+            size = mp.stat().st_size
+        return round(size / 1e6, 1)
+    except Exception:
+        return None
+
+
 def load_model(model_path):
     try:
         import torch
@@ -41,15 +61,17 @@ def load_model(model_path):
         return None, None, f"ultralytics/torch not available: {e}"
     if not Path(model_path).exists():
         return None, None, f"model not found: {model_path}"
-    return YOLO(model_path), torch, None
+    model = YOLO(model_path, task="detect") if is_ncnn(model_path) else YOLO(model_path)
+    return model, torch, None
 
 
-# ── 1. Inference benchmark (GPU + CPU) ──────────────────────────────────────
+# ── 1. Inference benchmark ──────────────────────────────────────────────────
 
-def _time_device(model, device, runs):
+def _time_device(model, device, runs, ncnn=False):
     import numpy as np
     blank = np.zeros((640, 640, 3), dtype=np.uint8)
-    model.to(device)
+    if not ncnn:
+        model.to(device)                      # NCNN has no .to() — CPU only
     model(blank, verbose=False, device=device)          # warm-up (not timed)
     times = []
     for _ in range(runs):
@@ -62,33 +84,37 @@ def _time_device(model, device, runs):
 
 def benchmark(model, torch, model_path, device_arg, do_cpu):
     out = {}
-    has_cuda = bool(torch.cuda.is_available())
-    primary = device_arg if device_arg else (0 if has_cuda else "cpu")
-
-    if primary == 0 or primary == "0":
-        out["gpu"] = _time_device(model, 0, 30)
+    if is_ncnn(model_path):
+        out["engine"] = "NCNN"
+        out["cpu"] = _time_device(model, "cpu", 10, ncnn=True)
     else:
-        out["cpu"] = _time_device(model, "cpu", 5)
+        out["engine"] = "PyTorch"
+        has_cuda = bool(torch.cuda.is_available())
+        primary = device_arg if device_arg else (0 if has_cuda else "cpu")
+        if str(primary) == "0":
+            out["gpu"] = _time_device(model, 0, 30)
+        else:
+            out["cpu"] = _time_device(model, "cpu", 5)
+        if do_cpu and "cpu" not in out:
+            out["cpu"] = _time_device(model, "cpu", 5)   # for the comparison
 
-    if do_cpu and "cpu" not in out:
-        out["cpu"] = _time_device(model, "cpu", 5)   # for the comparison
-
-    out["size_mb"] = round(os.path.getsize(model_path) / 1e6, 1)
+    out["size_mb"] = model_size_mb(model_path)
     try:
         out["params_m"] = round(sum(p.numel() for p in model.model.parameters()) / 1e6, 2)
     except Exception:
-        out["params_m"] = None
+        out["params_m"] = None      # NCNN model isn't a torch module
     return out
 
 
 # ── 2. Road-model validation ────────────────────────────────────────────────
 
-def validate_road(model, device_arg, data_yaml):
+def validate_road(model, device_arg, data_yaml, ncnn=False):
     if not Path(data_yaml).exists():
         return {"error": f"dataset yaml not found: {data_yaml}"}
     try:
         import torch
-        dev = device_arg if device_arg else (0 if torch.cuda.is_available() else "cpu")
+        dev = "cpu" if ncnn else (device_arg if device_arg
+                                  else (0 if torch.cuda.is_available() else "cpu"))
         m = model.val(data=str(data_yaml), verbose=False, device=dev)
     except Exception as e:
         return {"error": f"validation failed: {e}"}
@@ -116,22 +142,13 @@ def run_tests():
                            cwd=str(ROOT), capture_output=True, text=True, timeout=600)
     except Exception as e:
         return {"error": f"could not run pytest: {e}"}
-    tail = (p.stdout or p.stderr).strip().splitlines()
-    summary = tail[-1] if tail else ""
-    passed = failed = 0
-    for tok in summary.replace(",", "").split():
-        if tok.isdigit():
-            n = int(tok)
-            if "passed" in summary.split(str(n), 1)[1][:9]:
-                passed = n
-            elif "failed" in summary.split(str(n), 1)[1][:9]:
-                failed = n
-    # robust fallback: parse words
     import re
-    mp = re.search(r"(\d+)\s+passed", summary); mf = re.search(r"(\d+)\s+failed", summary)
-    passed = int(mp.group(1)) if mp else passed
-    failed = int(mf.group(1)) if mf else failed
-    return {"passed": passed, "failed": failed, "summary": summary}
+    summary = ((p.stdout or p.stderr).strip().splitlines() or [""])[-1]
+    mp = re.search(r"(\d+)\s+passed", summary)
+    mf = re.search(r"(\d+)\s+failed", summary)
+    return {"passed": int(mp.group(1)) if mp else 0,
+            "failed": int(mf.group(1)) if mf else 0,
+            "summary": summary}
 
 
 # ── Charts ──────────────────────────────────────────────────────────────────
@@ -155,11 +172,10 @@ def make_charts(road, bench, outdir):
         plt.ylim(0, 100); plt.xticks(rotation=20, ha="right"); plt.tight_layout()
         p = outdir / "per_class_ap50.png"; plt.savefig(p, dpi=130); plt.close(); made.append(p)
 
-    if bench and "gpu" in bench and "cpu" in bench:
-        labels = ["CPU", "GPU"]
+    if bench and "gpu" in bench and "cpu" in bench:          # only for .pt (GPU vs CPU)
         vals = [bench["cpu"]["ms"], bench["gpu"]["ms"]]
         plt.figure(figsize=(5, 4))
-        bars = plt.bar(labels, vals, color=["#9CA3AF", "#3F6B2A"])
+        bars = plt.bar(["CPU", "GPU"], vals, color=["#9CA3AF", "#3F6B2A"])
         plt.ylabel("ms / frame (lower = faster)")
         plt.title("Road Inference Speed — CPU vs GPU")
         for b, v in zip(bars, vals):
@@ -190,13 +206,17 @@ def build_report(bench, road, tests, charts):
     if bench.get("error"):
         L.append(f"_Skipped — {bench['error']}_")
     else:
+        eng = bench.get("engine", "")
         if "gpu" in bench:
-            L.append(f"- **GPU: {bench['gpu']['ms']} ms/frame (~{bench['gpu']['fps']} FPS)**")
+            L.append(f"- **GPU ({eng}): {bench['gpu']['ms']} ms/frame (~{bench['gpu']['fps']} FPS)**")
         if "cpu" in bench:
-            L.append(f"- CPU: {bench['cpu']['ms']} ms/frame (~{bench['cpu']['fps']} FPS)")
+            lead = "**" if "gpu" not in bench else ""
+            end = "**" if "gpu" not in bench else ""
+            L.append(f"- {lead}CPU ({eng}): {bench['cpu']['ms']} ms/frame (~{bench['cpu']['fps']} FPS){end}")
         if "gpu" in bench and "cpu" in bench and bench["gpu"]["ms"]:
             L.append(f"- Speedup: **{round(bench['cpu']['ms']/bench['gpu']['ms'], 1)}× faster on GPU**")
-        L.append(f"- Model size: {bench['size_mb']} MB   ·   Parameters: {bench['params_m']} M")
+        params = f"{bench['params_m']} M" if bench.get("params_m") else "n/a (NCNN)"
+        L.append(f"- Model size: {bench['size_mb']} MB   ·   Parameters: {params}")
     L.append("")
 
     L.append("## 3. Test Suite (pytest)")
@@ -219,10 +239,10 @@ def build_report(bench, road, tests, charts):
 
 def main():
     ap = argparse.ArgumentParser(description="DriverGuard evaluation")
-    ap.add_argument("--device", default=None, help="'cpu' or a CUDA index")
+    ap.add_argument("--device", default=None, help="'cpu' or a CUDA index (.pt only)")
     ap.add_argument("--data", default=str(ROOT / "data" / "finetune_india.yaml"))
     ap.add_argument("--no-val", action="store_true")
-    ap.add_argument("--no-cpu", action="store_true", help="skip the slow CPU benchmark")
+    ap.add_argument("--no-cpu", action="store_true", help="skip the slow CPU benchmark (.pt only)")
     ap.add_argument("--no-tests", action="store_true")
     ap.add_argument("--no-charts", action="store_true")
     args = ap.parse_args()
@@ -235,12 +255,12 @@ def main():
     if err:
         bench = {"error": err}; road = {"error": err}
     else:
+        ncnn = is_ncnn(model_path)
         bench = benchmark(model, torch, model_path, args.device, not args.no_cpu)
         road = {"error": "skipped (--no-val)"} if args.no_val \
-            else validate_road(model, args.device, args.data)
+            else validate_road(model, args.device, args.data, ncnn=ncnn)
 
     tests = {"error": "skipped (--no-tests)"} if args.no_tests else run_tests()
-
     charts = [] if args.no_charts else make_charts(road, bench, ROOT / "evaluation_charts")
 
     report = build_report(bench, road, tests, charts)
@@ -249,6 +269,7 @@ def main():
     print(f"\nSaved: {ROOT / 'evaluation_report.md'}")
     if charts:
         print("Charts: " + ", ".join(str(p) for p in charts))
+
 
 if __name__ == "__main__":
     main()
