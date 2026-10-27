@@ -1,11 +1,6 @@
 """
-scripts/export_ncnn.py
 One-time: convert the trained .pt road model to NCNN (ARM-optimised, CPU).
-
-NCNN runs YOLO fast on the Raspberry Pi's CPU with no accuracy loss. The
-exported files are platform-independent, so you can run this on your LAPTOP
-(where Ultralytics already works) and copy the folder to the Pi.
-
+NCNN runs YOLO fast on the Raspberry Pi's CPU with no accuracy loss.
 Run from the repo root:
     python scripts/export_ncnn.py
     python scripts/export_ncnn.py --model models/yolov8n_rdd_india.pt --imgsz 640
