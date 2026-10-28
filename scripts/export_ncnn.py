@@ -1,41 +1,70 @@
 """
-One-time: convert the trained .pt road model to NCNN (ARM-optimised, CPU).
-NCNN runs YOLO fast on the Raspberry Pi's CPU with no accuracy loss.
-Run from the repo root:
-    python scripts/export_ncnn.py
-    python scripts/export_ncnn.py --model models/yolov8n_rdd_india.pt --imgsz 640
+Export YOLOv8 .pt model to NCNN format for fast ARM inference.
 
-Produces:  models/yolov8n_rdd_india_ncnn_model/
-Then set  road.model_path  in config.yaml (on the Pi) to that folder.
+Usage
+─────
+    python scripts/export_ncnn.py                # default 320x320
+    python scripts/export_ncnn.py --imgsz 640    # export at 640x640
+
+Ultralytics requires the folder to end with _ncnn_model.
+When exporting at a non-default size, the folder is named:
+    models/yolov8n_rdd_india_640_ncnn_model
+so both 320 and 640 exports can coexist.
 """
 
 import argparse
+import json
+import shutil
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from ultralytics import YOLO
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Export the road model to NCNN")
-    ap.add_argument("--model", default=str(ROOT / "models" / "yolov8n_rdd_india.pt"))
-    ap.add_argument("--imgsz", type=int, default=640)
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description="Export YOLO to NCNN")
+    parser.add_argument("--model", default="models/yolov8n_rdd_india.pt",
+                        help="Path to .pt model file")
+    parser.add_argument("--imgsz", type=int, default=320,
+                        help="Input image size for the exported model (default 320)")
+    args = parser.parse_args()
 
-    if not Path(args.model).exists():
-        print(f"Model not found: {args.model}")
-        return
+    model_path = args.model
+    imgsz = args.imgsz
+    stem = Path(model_path).stem
 
-    from ultralytics import YOLO
-    print(f"Exporting {args.model}  ->  NCNN  (imgsz={args.imgsz}) …")
-    out = YOLO(args.model).export(format="ncnn", imgsz=args.imgsz)
+    print(f"Loading {model_path} ...")
+    model = YOLO(model_path)
 
-    print(f"\nDone. NCNN model folder:\n   {out}")
-    print("\nNext:")
-    print("  1. Copy that folder to the Pi (or commit it to the repo).")
-    print("  2. On the Pi, set in config.yaml:")
-    print("       road:")
-    print("         model_path: \"models/yolov8n_rdd_india_ncnn_model\"")
-    print("  3. On the Pi: pip install ncnn")
+    # Ultralytics names the output after the .pt stem, so for non-default
+    # sizes export from a temp copy named <stem>_<size>.pt. This yields
+    # <stem>_<size>_ncnn_model without touching the default 320 folder.
+    tmp_pt = None
+    if imgsz != 320:
+        tmp_pt = Path(model_path).with_name(f"{stem}_{imgsz}.pt")
+        shutil.copy2(model_path, tmp_pt)
+        sized_path = tmp_pt.with_name(f"{tmp_pt.stem}_ncnn_model")
+        if sized_path.exists():
+            shutil.rmtree(sized_path)
+        model = YOLO(str(tmp_pt))
+
+    print(f"Exporting to NCNN @ imgsz={imgsz} ...")
+    try:
+        out = model.export(format="ncnn", imgsz=imgsz, half=False)
+    finally:
+        if tmp_pt is not None:
+            tmp_pt.unlink(missing_ok=True)
+    out_path = Path(out)  # e.g. models/yolov8n_rdd_india_ncnn_model
+
+    # Save metadata so evaluate.py knows the export size
+    meta = {"imgsz": imgsz, "source": model_path, "stem": stem}
+    (out_path / "export_meta.json").write_text(json.dumps(meta))
+
+    print(f"Done → {out_path}")
+    print(f"\nTo use in config.yaml:")
+    print(f'  model_path: "{out_path}"')
+    if imgsz != 320:
+        print(f"\nTo compare 320 vs {imgsz}:")
+        print(f"  python evaluate.py --compare 320 {imgsz}")
 
 
 if __name__ == "__main__":
