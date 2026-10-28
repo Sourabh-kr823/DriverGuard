@@ -4,11 +4,11 @@
 #
 # Install on Raspberry Pi:
 #   1. Copy this file:
-#        sudo cp deploy/driver_guard.service /etc/systemd/system/driver_guard.service
+#        sudo cp driver_guard.service /etc/systemd/system/driver_guard.service
 #
 #   2. Edit the paths below to match your installation:
-#        User=        → your Pi username (default: pi)
-#        WorkingDirectory=/home/pi/driver_guard/
+#        User=        → your Pi username
+#        WorkingDirectory=/home/sourabh/Desktop/DriverGuard/
 #        ExecStart=   → path to your venv python + main.py
 #
 #   3. Enable and start:
@@ -30,12 +30,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/driver_guard
+User=sourabh
+Group=sourabh
+WorkingDirectory=/home/sourabh/Desktop/DriverGuard
 
 # Activate virtualenv and run
-ExecStart=/home/pi/driver_guard/.venv/bin/python main.py
+ExecStart=/home/sourabh/Desktop/DriverGuard/.venv/bin/python main.py --config /home/sourabh/Desktop/DriverGuard/config.yaml
 
 # Restart automatically if it crashes
 Restart=on-failure
@@ -45,7 +45,6 @@ StartLimitBurst=5
 
 # Environment — override config path if needed
 Environment="PYTHONUNBUFFERED=1"
-Environment="DG_CONFIG=/home/pi/driver_guard/config.yaml"
 
 # Give time for camera / GPS to initialise on boot
 ExecStartPre=/bin/sleep 5

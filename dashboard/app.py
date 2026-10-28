@@ -156,8 +156,8 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
 <div class="hdr">
   <div class="logo">VSM <span style="color:var(--text2)">Live</span></div>
   <span class="badge live" id="conn-badge">● CONNECTING...</span>
-  <span class="badge">DMS 30 FPS</span>
-  <span class="badge">ROAD 30 FPS</span>
+  <span class="badge">DMS 20 FPS</span>
+  <span class="badge">ROAD 20 FPS</span>
   <span class="badge">NEO-6M GPS</span>
   <div class="htime" id="htime">--:--:--</div>
   <button onclick="recalibrateDriver()" id="recal-btn"
@@ -388,8 +388,8 @@ socket.on("vsm_update", data => {
   $("v-mar").className   = "mv" + (data.mar > 1.70 ? " warn" : "");
   $("v-yaw").textContent = (data.yaw > 0 ? "+" : "") + data.yaw.toFixed(0) + "°";
   $("v-pitch").textContent = (data.pitch > 0 ? "+" : "") + data.pitch.toFixed(0) + "°";
-  $("v-ecf").textContent = (data.eye_frames || 0) + " / 20";
-  $("v-yf").textContent  = (data.yawn_frames || 0) + " / 45";
+  $("v-ecf").textContent = (data.eye_frames || 0) + " / 13";
+  $("v-yf").textContent  = (data.yawn_frames || 0) + " / 8";
   const rb = $("risk-badge");
   rb.textContent = data.risk_level.toUpperCase();
   rb.className   = "rb r-" + data.risk_level;
@@ -479,7 +479,7 @@ function refreshStats() {
   }).catch(() => {});
 }
 refreshStats();
-setInterval(refreshStats, 5000);
+setInterval(refreshStats, 10000);
 
 function refreshAlertHistory() {
   fetch("/api/events/driver").then(r => r.json()).then(rows => {
@@ -501,7 +501,7 @@ function refreshAlertHistory() {
   }).catch(() => {});
 }
 refreshAlertHistory();
-setInterval(refreshAlertHistory, 5000);
+setInterval(refreshAlertHistory, 10000);
 
 const stateChart = new Chart(document.getElementById("state-chart"), {
   type: "doughnut",
@@ -550,7 +550,7 @@ function refreshChart() {
   }).catch(() => {});
 }
 refreshChart();
-setInterval(refreshChart, 3000);
+setInterval(refreshChart, 8000);
 
 const map = L.map("map").setView([12.9716, 77.5946], 14);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"OpenStreetMap"}).addTo(map);
@@ -568,7 +568,7 @@ function refreshMap() {
   }).catch(() => {});
 }
 refreshMap();
-setInterval(refreshMap, 5000);
+setInterval(refreshMap, 12000);
 
 function refreshTable() {
   fetch("/api/events/driver").then(r => r.json()).then(rows => {
@@ -586,7 +586,7 @@ function refreshTable() {
   }).catch(() => {});
 }
 refreshTable();
-setInterval(refreshTable, 5000);
+setInterval(refreshTable, 10000);
 
 // ══ FEATURE 1: Session Timer + Fatigue Warning ══════════════════════════════
 const SESSION_START_MS = Date.now();           // Unix epoch milliseconds at page load
@@ -765,7 +765,7 @@ window._periodicMapRefresh = () => {
 };
 // Replace the periodic interval
 clearInterval(window._mapInterval);
-window._mapInterval = setInterval(window._periodicMapRefresh, 5000);
+window._mapInterval = setInterval(window._periodicMapRefresh, 12000);
 
 // ══ Patch refreshStats to also update scorecard ═══════════════════════════
 const _origRefreshStats = refreshStats;
@@ -876,7 +876,7 @@ function toggleMute() {
 def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
     app      = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-    push_interval = 1.0 / 10
+    push_interval = 1.0 / 4   # 4 Hz — smooth enough, much lighter on Pi
     session_start_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     logger.info(f"[Dashboard] Session start: {session_start_iso}")
 

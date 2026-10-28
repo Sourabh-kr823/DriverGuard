@@ -161,13 +161,21 @@ class DriverMonitor:
         if self.backend in ("mediapipe", "both"):
             try:
                 import mediapipe as mp
-                self._mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
-                    static_image_mode=False,
-                    max_num_faces=1,
-                    refine_landmarks=False,   # PERF: iris tracking not needed → saves ~15-20ms/frame
-                    min_detection_confidence=self.cfg.get("mediapipe_confidence", 0.5),
-                    min_tracking_confidence=0.5,
-                )
+                if hasattr(mp, "solutions"):
+                    self._mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                        static_image_mode=False,
+                        max_num_faces=1,
+                        refine_landmarks=False,   # PERF: iris tracking not needed → saves ~15-20ms/frame
+                        min_detection_confidence=self.cfg.get("mediapipe_confidence", 0.5),
+                        min_tracking_confidence=0.5,
+                    )
+                else:
+                    # Newer MediaPipe (Raspberry Pi / Python 3.13) — Tasks API
+                    from .mp_face_mesh import TasksFaceMesh, DEFAULT_MODEL_PATH
+                    self._mp_face_mesh = TasksFaceMesh(
+                        model_path=self.cfg.get("mediapipe_model_path", DEFAULT_MODEL_PATH),
+                        min_detection_confidence=self.cfg.get("mediapipe_confidence", 0.5),
+                    )
                 logger.success("[DMS] MediaPipe 468-pt model loaded ✓")
             except Exception as e:
                 logger.error(f"[DMS] MediaPipe load failed: {e}")

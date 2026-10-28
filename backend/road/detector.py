@@ -29,7 +29,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-import torch
 import cv2
 import numpy as np
 from pathlib import Path
@@ -133,18 +132,26 @@ class RoadDamageDetector:
                 self._model  = YOLO(self.model_path, task="detect")
                 engine = "NCNN"
             else:
-                self._device = 0 if torch.cuda.is_available() else "cpu"
+                self._device = 0 if self._has_cuda() else "cpu"
                 self._model  = YOLO(self.model_path)
                 self._model.to(self._device)
                 engine = "PyTorch"
-            dummy = np.zeros((640, 640, 3), dtype=np.uint8)
-            self._model.predict(dummy, verbose=False, device=self._device)
+            dummy = np.zeros((320, 320, 3), dtype=np.uint8)
+            self._model.predict(dummy, verbose=False, device=self._device, imgsz=320)
             logger.success(f"[Road] YOLOv8-nano loaded ({engine}) on {str(self._device).upper()} ✓")
         except FileNotFoundError:
             logger.warning(f"[Road] Model file not found: {self.model_path}. "
                            "Using dummy detections.")
         except Exception as e:
             logger.error(f"[Road] Model load failed: {e}")
+
+    @staticmethod
+    def _has_cuda():
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except ImportError:
+            return False
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
@@ -158,6 +165,7 @@ class RoadDamageDetector:
             frame,
             conf=self._base_conf,
             iou=self.iou_thr,
+            imgsz=320,
             verbose=False,
             stream=False,
             device=self._device,

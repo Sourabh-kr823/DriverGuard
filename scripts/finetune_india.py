@@ -30,6 +30,10 @@ Usage
 
     python finetune_india.py --batch 4     # if GPU runs out of memory
     python finetune_india.py --device cpu  # CPU fallback (slow)
+
+    # Adapt to the Pi's 320 inference size. Saves to
+    # models/yolov8n_rdd_india_320.pt and leaves the 640 model untouched.
+    python scripts/finetune_india.py --imgsz 320 --freeze 0 --lr0 0.001
 """
 
 import argparse
@@ -40,8 +44,13 @@ from pathlib import Path
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
-ROOT       = Path(__file__).resolve().parent            # D:/We4/DriverGuard
+# Project root — works whether this file sits in scripts/ or the repo root
+_HERE      = Path(__file__).resolve().parent
+ROOT       = _HERE.parent if _HERE.name == "scripts" else _HERE   # D:/We4/DriverGuard
 BASE_MODEL = ROOT / "models" / "yolov8n_rdd_india.pt"  # existing 58.8% model
+
+# Baseline mAP50 of the 640-trained model on the val split, per eval size
+BASELINE_MAP50 = {640: 58.9, 320: 48.2}
 TRAIN_OUT  = Path("D:/We4/training_output")
 
 # Dataset folders (absolute — avoids relative path resolution issues)
@@ -115,7 +124,8 @@ def verify():
 
 # ─── Step 3: Fine-tune ────────────────────────────────────────────────────────
 
-def finetune(epochs: int, batch: int, device: str):
+def finetune(epochs: int, batch: int, device: str,
+             imgsz: int = 640, freeze: int = 10, lr0: float = 0.0005):
     import os
     from ultralytics import YOLO
 
@@ -123,13 +133,22 @@ def finetune(epochs: int, batch: int, device: str):
     # Without this, the process may crash immediately after training starts
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-    # Safety backup — so you can roll back to the old model if needed
-    backup = BASE_MODEL.with_suffix(".backup.pt")
-    shutil.copy2(BASE_MODEL, backup)
-    print(f"\n   Backed up existing model  →  {backup.name}")
-    print(f"   Fine-tuning from          →  {BASE_MODEL.name}  (58.8% mAP50)")
+    # 640 runs replace the main model (with backup). Other sizes get their
+    # own file so the 640 model is never overwritten by a lower-res one.
+    if imgsz == 640:
+        target = BASE_MODEL
+        backup = BASE_MODEL.with_suffix(".backup.pt")
+        shutil.copy2(BASE_MODEL, backup)
+        print(f"\n   Backed up existing model  →  {backup.name}")
+    else:
+        target = BASE_MODEL.with_name(f"{BASE_MODEL.stem}_{imgsz}.pt")
+        backup = None
+    old_map = BASELINE_MAP50.get(imgsz)
+    print(f"   Fine-tuning from          →  {BASE_MODEL.name}")
+    print(f"   Will save to              →  {target.name}")
     print(f"   Dataset YAML              →  {YAML_PATH.name}")
-    print(f"   Epochs: {epochs}   Batch: {batch}   Device: {device}\n")
+    print(f"   Epochs: {epochs}   Batch: {batch}   Device: {device}")
+    print(f"   imgsz: {imgsz}   freeze: {freeze}   lr0: {lr0}\n")
 
     model = YOLO(str(BASE_MODEL))
 
@@ -137,10 +156,10 @@ def finetune(epochs: int, batch: int, device: str):
         data    = str(YAML_PATH),
         epochs  = epochs,
         batch   = batch,
-        imgsz   = 640,
+        imgsz   = imgsz,
         device  = device,
         project = str(TRAIN_OUT),
-        name    = "rdd_india_finetune",
+        name    = f"rdd_india_finetune_{imgsz}",
 
         # ── Fine-tuning hyperparameters ──────────────────────────────────
         # Low LR because we're refining, not learning from scratch.
@@ -151,13 +170,13 @@ def finetune(epochs: int, batch: int, device: str):
         # its own LR (0.01). Confirmed from log: "ignoring lr0=0.0005 ... MuSGD(lr=0.01)"
         # Explicitly setting SGD forces our low LR to be respected.
         optimizer     = "SGD",
-        lr0           = 0.0005,   # low LR — refining, not learning from scratch
+        lr0           = lr0,      # low LR — refining, not learning from scratch
         lrf           = 0.01,
 
         # Freeze the first 10 backbone layers.
         # These learn low-level features (edges, textures) which are
         # already well-learned. Only the detection head needs India tuning.
-        freeze        = 10,
+        freeze        = freeze,
 
         # Let gradients stabilise before full training kicks in
         warmup_epochs = 3,
@@ -188,28 +207,35 @@ def finetune(epochs: int, batch: int, device: str):
     # Deploy best weights back to models/
     best = Path(results.save_dir) / "weights" / "best.pt"
     if best.exists():
-        shutil.copy2(best, BASE_MODEL)
+        shutil.copy2(best, target)
 
         m        = results.results_dict
         new_map  = m.get("metrics/mAP50(B)",    0) * 100
         new_map2 = m.get("metrics/mAP50-95(B)", 0) * 100
-        old_map  = 58.8
 
         print("\n" + "─" * 56)
         print("  Fine-tuning complete!")
-        print(f"  Previous mAP50    :  {old_map:.1f}%")
-        print(f"  New mAP50         :  {new_map:.1f}%  "
-              f"({'↑ improved!' if new_map > old_map else '↓ try more epochs'})")
+        if old_map is not None:
+            print(f"  Previous mAP50 @{imgsz}:  {old_map:.1f}%")
+            print(f"  New mAP50      @{imgsz}:  {new_map:.1f}%  "
+                  f"({'↑ improved!' if new_map > old_map else '↓ try more epochs'})")
+        else:
+            print(f"  New mAP50      @{imgsz}:  {new_map:.1f}%")
         print(f"  New mAP50-95      :  {new_map2:.1f}%")
         print(f"  Run folder        :  {results.save_dir}")
-        print(f"  Deployed model    :  {BASE_MODEL}")
-        print(f"  Old model backup  :  {backup.name}")
+        print(f"  Deployed model    :  {target}")
+        if backup is not None:
+            print(f"  Old model backup  :  {backup.name}")
         print("─" * 56)
-        print("\n  Restart DriverGuard to load the improved model.\n")
+        if imgsz == 640:
+            print("\n  Restart DriverGuard to load the improved model.\n")
+        else:
+            print(f"\n  Copy {target.name} to the Pi's models/ and run:")
+            print(f"    python scripts/export_ncnn.py --model models/{target.name} --imgsz {imgsz}\n")
     else:
         print(f"\n⚠  best.pt not found at {best}")
         print(f"   Training may have crashed — check the output above.")
-        print(f"   Your original model is safe at: {backup}")
+        print(f"   Your original model is safe at: {BASE_MODEL}")
 
 
 # ─── Entry ────────────────────────────────────────────────────────────────────
@@ -225,12 +251,19 @@ if __name__ == "__main__":
                         help="Batch size — use 4 if GPU runs OOM (default: 8)")
     parser.add_argument("--device", type=str, default="0",
                         help="CUDA device index or 'cpu' (default: 0)")
+    parser.add_argument("--imgsz",  type=int, default=640,
+                        help="Training image size — match the deploy size (default: 640)")
+    parser.add_argument("--freeze", type=int, default=10,
+                        help="Backbone layers to freeze; use 0 when changing imgsz (default: 10)")
+    parser.add_argument("--lr0",    type=float, default=0.0005,
+                        help="Initial learning rate (default: 0.0005)")
     args = parser.parse_args()
 
     print("\n── DriverGuard  India Fine-tune ──────────────────────────────")
     print(f"   Base model  :  yolov8n_rdd_india.pt  (58.8% mAP50)")
     print(f"   nc          :  5  (pothole / crack_long / crack_trans / rutting / repair)")
     print(f"   Epochs      :  {args.epochs}   Batch: {args.batch}   Device: {args.device}")
+    print(f"   imgsz       :  {args.imgsz}   freeze: {args.freeze}   lr0: {args.lr0}")
     print("──────────────────────────────────────────────────────────────\n")
 
     print("[1/3]  Writing absolute-path YAML …")
@@ -240,4 +273,5 @@ if __name__ == "__main__":
     verify()
 
     print("\n[3/3]  Fine-tuning …")
-    finetune(args.epochs, args.batch, args.device)
+    finetune(args.epochs, args.batch, args.device,
+             imgsz=args.imgsz, freeze=args.freeze, lr0=args.lr0)
