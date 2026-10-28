@@ -2,13 +2,16 @@
 backend/alert/voice_alert.py
 ─────────────────────────────
 Dual-channel offline TTS:
-  • Driver channel  → Female voice (Microsoft Zira) — driver monitoring alerts
-  • Road channel    → Male voice   (Microsoft David) — road/pothole alerts
+  • Driver channel  → Female voice (Zira on Windows, espeak "en+f3" on Linux)
+  • Road channel    → Male voice   (David on Windows, espeak "en+m3" on Linux)
   • Severe tier     → Faster rate + louder + emphasis on words
 
-pyttsx3 engine is re-created per message (required for Windows SAPI5 threading).
-PowerShell fallback if pyttsx3 fails.
+Windows:  pyttsx3 (SAPI5), PowerShell fallback. The pyttsx3 engine is
+          re-created per message (required for SAPI5 threading).
+Linux/Pi: espeak-ng (or espeak) called directly — `sudo apt install espeak-ng`.
 """
+import shutil
+import sys
 import threading
 import queue
 import time
@@ -20,12 +23,21 @@ try:
     _HAS_PYTTSX3 = True
 except ImportError:
     _HAS_PYTTSX3 = False
-    logger.warning("[Voice] pyttsx3 not found — using PowerShell TTS only")
+
+_IS_WINDOWS = sys.platform.startswith("win")
+_ESPEAK     = shutil.which("espeak-ng") or shutil.which("espeak")
+
+if not _IS_WINDOWS and _ESPEAK is None:
+    logger.warning("[Voice] espeak-ng not found — install it with: sudo apt install espeak-ng")
 
 
-# ── Default Windows voice names ───────────────────────────────────────────────
-VOICE_FEMALE = "Microsoft Zira Desktop"    # Driver alerts (higher pitch naturally)
-VOICE_MALE   = "Microsoft David Desktop"   # Road/pothole alerts
+# ── Default voice names ───────────────────────────────────────────────────────
+if _IS_WINDOWS:
+    VOICE_FEMALE = "Microsoft Zira Desktop"    # Driver alerts (higher pitch naturally)
+    VOICE_MALE   = "Microsoft David Desktop"   # Road/pothole alerts
+else:
+    VOICE_FEMALE = "en+f3"                     # espeak voice + female variant
+    VOICE_MALE   = "en+m3"
 
 
 class VoiceAlert:
@@ -117,7 +129,22 @@ class VoiceAlert:
             self._speak_once(text, rate, volume, voice)
 
     def _speak_once(self, text: str, rate: int, volume: float, voice_name: str):
-        """Speak one message — tries pyttsx3 first, falls back to PowerShell."""
+        """Speak one message — espeak-ng on Linux; pyttsx3 then PowerShell on Windows."""
+
+        # ── espeak-ng (Linux / Raspberry Pi) ──────────────────────────────────
+        if not _IS_WINDOWS:
+            if _ESPEAK is None:
+                return
+            try:
+                subprocess.run(
+                    [_ESPEAK, "-v", voice_name, "-s", str(rate),
+                     "-a", str(int(volume * 200)), text],      # espeak amplitude 0-200
+                    timeout=15, capture_output=True,
+                )
+                logger.debug(f"[Voice] Spoke (espeak {voice_name}): {text!r}")
+            except Exception as e:
+                logger.debug(f"[Voice] espeak error: {e}")
+            return
 
         # ── pyttsx3 ───────────────────────────────────────────────────────────
         if _HAS_PYTTSX3:

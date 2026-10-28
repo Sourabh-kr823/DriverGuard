@@ -111,9 +111,11 @@ else:
 section("3. Cameras")
 
 import cv2
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.camera import open_capture
 
 def test_camera(source, name):
-    cap = cv2.VideoCapture(source)
+    cap = open_capture(source)
     if not cap.isOpened():
         check(f"Camera {source} ({name})", False, "not detected")
         return
@@ -214,7 +216,7 @@ simulate = cfg.get("gps", {}).get("simulation", True)
 if simulate:
     check("GPS mode", True, "simulation mode — NEO-6M not needed", warn=True)
 else:
-    port = cfg.get("gps", {}).get("port", "COM3")
+    port = cfg.get("gps", {}).get("port", "/dev/serial0")
     try:
         import serial
         s = serial.Serial(port, timeout=1)

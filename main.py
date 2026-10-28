@@ -47,6 +47,7 @@ from dashboard.app                  import create_app
 from backend.road.proximity_alert   import ProximityAlertManager
 from backend.alert.voice_alert       import VoiceAlert
 from utils.watchdog                  import Watchdog
+from utils.camera                    import open_capture
 
 
 # ─── Configuration ────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ def load_config(path: str) -> dict:
 # ─── Camera thread helpers ────────────────────────────────────────────────────
 
 class CameraCapture:
-    """Thread-safe OpenCV camera wrapper with reconnect logic."""
+    """Thread-safe camera wrapper (OpenCV / picamera2) with reconnect logic."""
 
     def __init__(self, source, width, height, fps, name="cam"):
         self.source = source
@@ -85,10 +86,7 @@ class CameraCapture:
             self._cap.release()
 
     def _connect(self):
-        self._cap = cv2.VideoCapture(self.source)
-        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
-        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-        self._cap.set(cv2.CAP_PROP_FPS,          self.fps)
+        self._cap = open_capture(self.source, self.width, self.height, self.fps)
         if not self._cap.isOpened():
             logger.warning(f"[{self.name}] Camera {self.source} not opened yet")
 
@@ -120,7 +118,7 @@ def dms_thread(dms: DriverMonitor, cam: CameraCapture,
     logger.info("[DMS] Pipeline thread started")
     prev_risk  = "low"
 
-    _target_dt = 1 / 30   # aim for 30 FPS
+    _target_dt = 1 / 20   # 20 FPS — balanced for Pi 5 CPU
     while not stop.is_set():
         _t0 = time.time()
         # A single bad frame or transient model error must not kill the thread.
@@ -170,7 +168,8 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
                 show_preview: bool, stop: threading.Event,
                 writer: cv2.VideoWriter = None, wd=None):
     logger.info("[Road] Pipeline thread started")
-    _target_dt = 1 / 30
+    _target_dt = 1 / 20   # 20 FPS — balanced for Pi 5 CPU
+    _skip_count = 0
     # Fix 2: track last logged event per class to avoid duplicate DB entries
     # key = class_name, value = (timestamp, lat, lon)
     _last_logged: dict = {}
@@ -192,6 +191,15 @@ def road_thread(detector: RoadDamageDetector, cam: CameraCapture,
             # Save raw frame to recording if enabled
             if writer is not None:
                 writer.write(frame)
+
+            # Run YOLO on every 2nd frame to halve CPU load
+            _skip_count += 1
+            if _skip_count % 2 != 0:
+                _elapsed = time.time() - _t0
+                _sleep = _target_dt - _elapsed
+                if _sleep > 0:
+                    time.sleep(_sleep)
+                continue
 
             gps = alert.state
             dets = detector.process(frame, lat=gps.lat, lon=gps.lon)
@@ -318,7 +326,7 @@ def main():
     gps     = GPSReader(cfg["gps"])
     # Startup validation
     import os as _os
-    _model = cfg.get("road", {}).get("model_path", "models/yolov8n_rdd_india.pt")
+    _model = cfg.get("road", {}).get("model_path", "models/yolov8n_rdd_india_ncnn_model")
     if not _os.path.exists(_model):
         logger.error(f"Road model not found: {_model} — check models/ folder")
         return
@@ -413,7 +421,8 @@ def main():
         def _run_dash():
             logger.info(f"[Dashboard] http://{host}:{port}")
             socketio.run(app, host=host, port=port,
-                         use_reloader=False, log_output=False)
+                         use_reloader=False, log_output=False,
+                         allow_unsafe_werkzeug=True)   # async_mode="threading" → Werkzeug
 
         threading.Thread(target=_run_dash, daemon=True, name="Dashboard").start()
 

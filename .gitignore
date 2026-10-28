@@ -8,8 +8,10 @@ __pycache__/
 
 # Model files
 models/*.dat
+models/*.task
 models/*.backup.pt
 models/yolov8n.pt
+models/*_ncnn_model/
 yolov8n.pt
 yolo26n.pt
 
@@ -26,6 +28,12 @@ data/logs/*.log
 data/india_finetune/
 data/recordings/
 runs/
+
+# Virtual environment
+.venv/
+
+# Test results (generated)
+data/test_results/
 
 # OS
 Thumbs.db

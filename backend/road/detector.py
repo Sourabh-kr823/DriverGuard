@@ -30,7 +30,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-import torch
 import cv2
 import numpy as np
 from loguru import logger
@@ -131,17 +130,28 @@ class RoadDamageDetector:
         logger.info(f"[Road] Loading YOLOv8 model: {self.model_path}")
         try:
             from ultralytics import YOLO
-            self._device = 0 if torch.cuda.is_available() else "cpu"
-            self._model  = YOLO(self.model_path)
-            self._model.to(self._device)
-            dummy = np.zeros((640, 640, 3), dtype=np.uint8)
+            self._model = YOLO(self.model_path)
+            is_ncnn = "_ncnn_" in self.model_path or self.model_path.endswith("_ncnn_model")
+            self._device = "cpu" if is_ncnn else (0 if self._has_cuda() else "cpu")
+            if not is_ncnn:
+                self._model.to(self._device)
+            dummy = np.zeros((320, 320, 3), dtype=np.uint8)
             self._model.predict(dummy, verbose=False, device=self._device)
-            logger.success(f"[Road] YOLOv8-nano loaded on {str(self._device).upper()} ✓")
+            backend = "NCNN" if is_ncnn else str(self._device).upper()
+            logger.success(f"[Road] YOLOv8-nano loaded on {backend} ✓")
         except FileNotFoundError:
             logger.warning(f"[Road] Model file not found: {self.model_path}. "
                            "Using dummy detections.")
         except Exception as e:
             logger.error(f"[Road] Model load failed: {e}")
+
+    @staticmethod
+    def _has_cuda():
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except ImportError:
+            return False
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
@@ -158,6 +168,7 @@ class RoadDamageDetector:
             frame,
             conf=self._base_conf,
             iou=self.iou_thr,
+            imgsz=320,
             verbose=False,
             stream=False,
             device=self._device,

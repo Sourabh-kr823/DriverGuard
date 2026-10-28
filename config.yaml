@@ -1,30 +1,30 @@
 system:
-  log_level: "DEBUG"
+  log_level: "INFO"      # DEBUG floods the Pi SD card / journal
 
 cameras:
   dms:
-    source: 1      # laptop camera (driver-facing)
+    source: "picamera"   # Pi CSI camera (imx708 NoIR) — driver-facing, works with IR at night
     width: 640
     height: 480
-    fps: 30
+    fps: 20
   road:
-    source: 0      # USB webcam (road-facing)
+    source: "/dev/v4l/by-id/usb-00004000_P040200_SN0002_1080P_Web_Camera_00004000_P040200_SN0002-video-index0"   # USB webcam (road-facing); stable path, /dev/videoN changes between boots
     width: 640
     height: 480
-    fps: 30
+    fps: 20
 
 dms:
   backend: "mediapipe"
   ear:
     threshold: 0.30       # pre-calibration fallback; auto-cal overrides this
-    consec_frames: 20     # 20 fr = 667ms sustained closure -> DROWSY
+    consec_frames: 13     # 13 fr @ 20fps = 650ms sustained closure -> DROWSY
   mar:
     threshold: 0.50       # corrected 6-pt MAR scale
-    consec_frames: 12     # 12 fr = 400ms sustained yawn -> FATIGUED
+    consec_frames: 8      # 8 fr @ 20fps = 400ms sustained yawn -> FATIGUED
   head_pose:
     yaw_limit: 30
     pitch_limit: 20
-    consec_frames: 8      
+    consec_frames: 5      # 5 fr @ 20fps = 250ms
   weights:
     ear: 0.45
     mar: 0.25
@@ -36,13 +36,13 @@ dms:
     clahe_grid: 8
 
 road:
-  model_path: "models/yolov8n_rdd_india.pt"
+  model_path: "models/yolov8n_rdd_india_ncnn_model"
   confidence_threshold: 0.50     # used when per_class_thresholds is false (paper benchmarks)
   iou_threshold: 0.35            # NEW: tighter NMS -> fewer duplicate boxes
   per_class_thresholds: true     # NEW: runtime per-class conf (pothole 0.35 ... repair 0.55)
   temporal_confirmation: true    # NEW: require a hazard across several frames before it counts
-  confirm_frames: 3              # NEW: must appear in at least this many...
-  confirm_window: 5              # NEW: ...of the last this-many frames
+  confirm_frames: 2              # must appear in at least this many (halved for 15fps + skip)
+  confirm_window: 4              # ...of the last this-many frames
   classes:
     0: "pothole"
     1: "crack_longitudinal"
@@ -58,7 +58,7 @@ road:
 gps:
   enabled: true
   simulation: true
-  port: "COM3"
+  port: "/dev/serial0"   # Pi GPIO UART (pins 8/10); use /dev/ttyUSB0 or /dev/ttyACM0 for a USB GPS
   baudrate: 9600         # FIXED: was 'baud' — gps_reader.py expects 'baudrate'
   timeout: 1.0
 
@@ -100,4 +100,4 @@ alert:
 database:
   path: "data/logs/driver_guard_events.db"
   flush_interval_sec: 5      
-  max_rows_per_table: 50000a
+  max_rows_per_table: 50000
