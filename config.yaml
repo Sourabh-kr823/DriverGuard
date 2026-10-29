@@ -36,7 +36,7 @@ dms:
     clahe_grid: 8
 
 road:
-  model_path: "models/yolov8n_rdd_india_ncnn_model"
+  model_path: "models/yolov8n_rdd_india_320_ncnn_model"
   confidence_threshold: 0.50     # used when per_class_thresholds is false (paper benchmarks)
   iou_threshold: 0.35            # NEW: tighter NMS -> fewer duplicate boxes
   per_class_thresholds: true     # NEW: runtime per-class conf (pothole 0.35 ... repair 0.55)
