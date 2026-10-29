@@ -158,7 +158,7 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   <span class="badge live" id="conn-badge">● CONNECTING...</span>
   <span class="badge">DMS 20 FPS</span>
   <span class="badge">ROAD 20 FPS</span>
-  <span class="badge">NEO-6M GPS</span>
+  <span class="badge">NEO-7M GPS</span>
   <div class="htime" id="htime">--:--:--</div>
   <button onclick="recalibrateDriver()" id="recal-btn"
     style="font-family:var(--font-mono);font-size:9px;padding:4px 12px;
@@ -242,7 +242,7 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
 
   <!-- GPS Panel -->
   <div class="panel">
-    <div class="ph"><span>GPS — NEO-6M</span></div>
+    <div class="ph"><span>GPS — NEO-7M</span></div>
     <div class="gps-row">
       <div class="gf"><span class="k">LAT</span><span class="v" id="g-lat">—</span></div>
       <div class="gf"><span class="k">LON</span><span class="v" id="g-lon">—</span></div>

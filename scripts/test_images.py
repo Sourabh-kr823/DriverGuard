@@ -88,7 +88,7 @@ def run_on_images(model, folder: Path):
         cv2.putText(frame, f"[{i+1}/{len(imgs)}] {img_path.name} — {n_dets} detections",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 180), 2)
 
-        cv2.imshow("DriverGuard — Road Detection Test", frame)
+        cv2.imshow("DriverGuard - Road Detection Test", frame)
         key = cv2.waitKey(0) & 0xFF
         if key in (ord('q'), 27):
             break
@@ -126,7 +126,7 @@ def run_on_video(model, source):
             cv2.putText(frame, f"Frame {frame_n} | Detections: {n_dets}",
                         (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 180), 2)
 
-        cv2.imshow("DriverGuard — Road Detection Test", frame)
+        cv2.imshow("DriverGuard - Road Detection Test", frame)
         key = cv2.waitKey(1) & 0xFF
         if key in (ord('q'), 27):
             break
@@ -165,7 +165,7 @@ def main():
         frame   = draw_detections(frame, results)
         n_dets  = sum(len(r.boxes) for r in results)
         print(f"Detections: {n_dets}")
-        cv2.imshow("DriverGuard — Road Detection Test", frame)
+        cv2.imshow("DriverGuard - Road Detection Test", frame)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     else:

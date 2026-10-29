@@ -442,7 +442,7 @@ def main():
                     frames = dict(_preview_frames)
                 for title, frm in frames.items():
                     if frm is not None:
-                        cv2.imshow("DMS — Driver Monitor" if title == "dms" else "Road Damage Detector", frm)
+                        cv2.imshow("DMS - Driver Monitor" if title == "dms" else "Road Damage Detector", frm)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     stop.set()

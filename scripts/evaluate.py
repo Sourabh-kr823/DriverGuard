@@ -108,14 +108,14 @@ def benchmark(model, torch, model_path, device_arg, do_cpu):
 
 # ── 2. Road-model validation ────────────────────────────────────────────────
 
-def validate_road(model, device_arg, data_yaml, ncnn=False):
+def validate_road(model, device_arg, data_yaml, ncnn=False, imgsz=640):
     if not Path(data_yaml).exists():
         return {"error": f"dataset yaml not found: {data_yaml}"}
     try:
         import torch
         dev = "cpu" if ncnn else (device_arg if device_arg
                                   else (0 if torch.cuda.is_available() else "cpu"))
-        m = model.val(data=str(data_yaml), verbose=False, device=dev)
+        m = model.val(data=str(data_yaml), verbose=False, device=dev, imgsz=imgsz)
     except Exception as e:
         return {"error": f"validation failed: {e}"}
     res = {"map50": round(float(m.box.map50) * 100, 1),
@@ -245,6 +245,8 @@ def main():
     ap.add_argument("--no-cpu", action="store_true", help="skip the slow CPU benchmark (.pt only)")
     ap.add_argument("--no-tests", action="store_true")
     ap.add_argument("--no-charts", action="store_true")
+    ap.add_argument("--imgsz", type=int, default=640,
+                    help="validation input size (e.g. 320 vs 640 to compare accuracy)")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -258,7 +260,7 @@ def main():
         ncnn = is_ncnn(model_path)
         bench = benchmark(model, torch, model_path, args.device, not args.no_cpu)
         road = {"error": "skipped (--no-val)"} if args.no_val \
-            else validate_road(model, args.device, args.data, ncnn=ncnn)
+            else validate_road(model, args.device, args.data, ncnn=ncnn, imgsz=args.imgsz)
 
     tests = {"error": "skipped (--no-tests)"} if args.no_tests else run_tests()
     charts = [] if args.no_charts else make_charts(road, bench, ROOT / "evaluation_charts")
