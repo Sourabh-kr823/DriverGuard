@@ -1,5 +1,5 @@
 """
-backend/road/proximity_alert.py
+
 ────────────────────────────────
 Predictive Road Hazard Alert System
 
@@ -51,7 +51,7 @@ OSM_COOLDOWN_S       = 30.0   # only query OSM every N seconds
 
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Return distance in metres between two GPS coordinates."""
-    R = 6_371_000  # Earth radius metres
+    R = 6_371_000 
     φ1, φ2 = math.radians(lat1), math.radians(lat2)
     dφ = math.radians(lat2 - lat1)
     dλ = math.radians(lon2 - lon1)
@@ -88,8 +88,8 @@ class ProximityAlert:
     hazard_type:  str   = ""       # "pothole" | "crack_longitudinal" | "unpaved" …
     distance_m:   float = 0.0      # metres to hazard
     severity:     str   = ""       # "minor" | "moderate" | "severe" | "unknown"
-    message:      str   = ""       # human-readable alert string
-    expires_at:   float = 0.0      # time.time() when alert should clear
+    message:      str   = ""       
+    expires_at:   float = 0.0      
     lat:          Optional[float] = None
     lon:          Optional[float] = None
 
