@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────
-#  VSM — requirements.txt
+#  DriverGuard — requirements.txt
 #  Install: pip install -r requirements.txt
 # ─────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ pynmea2>=1.18.0
 flask>=3.0.0
 flask-socketio>=5.3.6
 eventlet>=0.33.3           # async worker for flask-socketio
+requests>=2.31.0           # weather API + OSM surface lookup
 
 # Database
 # sqlite3 is part of Python stdlib — no extra install needed
@@ -31,8 +32,9 @@ eventlet>=0.33.3           # async worker for flask-socketio
 # Audio alert
 playsound>=1.3.0
 
-# GPIO (only on Raspberry Pi — comment out on non-RPi)
-# RPi.GPIO>=0.7.1
+# GPIO (Raspberry Pi 5 — install only on the Pi)
+gpiozero>=2.0
+lgpio>=0.2.2.0             # Pi 5 GPIO backend for gpiozero
 
 # Raspberry Pi camera / TTS — install from apt, not pip:
 #   sudo apt install python3-picamera2 espeak-ng

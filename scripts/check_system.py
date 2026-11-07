@@ -158,35 +158,46 @@ section("5. YOLOv8 Road Model Inference")
 
 try:
     from ultralytics import YOLO
-    import torch, numpy as np
+    import numpy as np
+    from pathlib import Path
 
-    device   = 0 if torch.cuda.is_available() else "cpu"
-    dev_name = "GPU" if device == 0 else "CPU"
+    imgsz   = int(cfg.get("road", {}).get("imgsz", 320))
+    is_ncnn = str(model_path).rstrip("/").endswith("_ncnn_model") or Path(model_path).is_dir()
 
-    t0 = time.time()
-    model = YOLO(model_path)
-    model.to(device)
+    if is_ncnn:
+        device, dev_name, engine = "cpu", "CPU", "NCNN"
+        t0 = time.time()
+        model = YOLO(model_path, task="detect")     # NCNN needs the task set explicitly
+    else:
+        try:
+            import torch
+            device = 0 if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            device = "cpu"
+        dev_name, engine = ("GPU" if device == 0 else "CPU"), "PyTorch"
+        t0 = time.time()
+        model = YOLO(model_path)
+        model.to(device)
     load_ms = int((time.time() - t0) * 1000)
-    check("YOLOv8 model load", True, f"{load_ms}ms on {dev_name}")
+    check("YOLO model load", True, f"{engine} {load_ms}ms on {dev_name}")
 
-    blank = np.zeros((640, 640, 3), dtype=np.uint8)
-    model(blank, verbose=False, device=device)          # warm-up (not timed)
+    blank = np.zeros((imgsz, imgsz, 3), dtype=np.uint8)
+    model.predict(blank, verbose=False, device=device, imgsz=imgsz)   # warm-up (not timed)
     t0 = time.time()
-    model(blank, verbose=False, device=device)          # timed run
+    model.predict(blank, verbose=False, device=device, imgsz=imgsz)   # timed run
     inf_ms  = int((time.time() - t0) * 1000)
     fps_est = round(1000 / inf_ms) if inf_ms > 0 else 0
 
-    check("YOLOv8 inference test", True,
-          f"{inf_ms}ms/frame on {dev_name}  (~{fps_est} FPS road pipeline)")
+    check("YOLO inference test", True,
+          f"{inf_ms}ms/frame @ {imgsz}px on {dev_name}  (~{fps_est} FPS road model)")
 
     if inf_ms > 100:
-        reason = "CUDA not available, running on CPU" if device == "cpu" \
-                 else f"slow even on {dev_name} — check GPU load"
-        check("YOLOv8 speed", False, f"{inf_ms}ms — {reason}", warn=True)
+        reason = "running on CPU" if device == "cpu" else f"slow on {dev_name} — check GPU load"
+        check("YOLO speed", False, f"{inf_ms}ms — {reason}", warn=True)
     else:
-        check("YOLOv8 speed", True, f"fast enough for real-time on {dev_name}")
+        check("YOLO speed", True, f"fast enough for real-time on {dev_name}")
 except Exception as e:
-    check("YOLOv8", False, str(e))
+    check("YOLO", False, str(e))
 
 # ── 6. Database ───────────────────────────────────────────────────────────────
 section("6. SQLite Database")
@@ -272,9 +283,9 @@ head_c = cfg.get("dms", {}).get("head_pose", {}).get("consec_frames", 0)
 iou    = cfg.get("road", {}).get("iou_threshold", 0.45)
 radius = cfg.get("proximity_alert", {}).get("radius_metres", 80)
 
-check("EAR consec_frames", ear_c == 20, f"{ear_c} frames (expected 20)")
-check("MAR consec_frames", mar_c == 12, f"{mar_c} frames (expected 12)")
-check("Head consec_frames", head_c == 8, f"{head_c} frames (expected 8)")
+check("EAR consec_frames", ear_c == 13, f"{ear_c} frames (expected 13 = 650ms @ 20fps)")
+check("MAR consec_frames", mar_c == 8, f"{mar_c} frames (expected 8 = 400ms @ 20fps)")
+check("Head consec_frames", head_c == 5, f"{head_c} frames (expected 5 = 250ms @ 20fps)")
 check("Road IOU threshold", iou <= 0.40, f"{iou} (≤0.40 = tighter NMS)")
 check("Proximity radius", radius == 80, f"{radius}m")
 check("DMS backend", backend == "mediapipe",
