@@ -84,7 +84,8 @@ voice_alert:
   cooldown_severe: 7.0     # seconds between severe alerts
 
 alert:
-  buzzer_gpio_pin: null
+  buzzer_gpio_pin: 17
+  buzzer_duration_ms: 200
   audio_alert: false
   dashboard_host: "0.0.0.0"
   dashboard_port: 5000
