@@ -1,12 +1,4 @@
-"""
-───────────────────────────────
-Alert Manager — central hub that:
 
-1. Computes a composite risk score from DMS + road signals.
-2. Triggers audio / GPIO buzzer alerts.
-3. Emits real-time state to the web dashboard via a shared dict.
-
-"""
 
 import threading
 import time
@@ -59,7 +51,7 @@ class AlertManager:
         self._buzz_lock  = threading.Lock()
         self._buzzing    = False
         self._stop       = threading.Event()
-        self._gpio       = None
+        self._buzzer     = None
 
         # Debounce: don't re-trigger audio within N seconds
         self._last_audio_ts = 0.0
@@ -76,10 +68,9 @@ class AlertManager:
     def stop(self):
         self._stop.set()
         self._set_buzzer(False)
-        if self._gpio:
+        if self._buzzer is not None:
             try:
-                import RPi.GPIO as GPIO
-                GPIO.cleanup()
+                self._buzzer.close()
             except Exception:
                 pass
 
@@ -88,14 +79,11 @@ class AlertManager:
             logger.info("[Alert] GPIO buzzer disabled (no pin configured)")
             return
         try:
-            import RPi.GPIO as GPIO
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.gpio_pin, GPIO.OUT)
-            GPIO.output(self.gpio_pin, GPIO.LOW)
-            self._gpio = GPIO
+            from gpiozero import OutputDevice
+            self._buzzer = OutputDevice(self.gpio_pin, active_high=True, initial_value=False)
             logger.success(f"[Alert] GPIO buzzer ready on BCM pin {self.gpio_pin}")
         except ImportError:
-            logger.warning("[Alert] RPi.GPIO not available — GPIO buzzer disabled")
+            logger.warning("[Alert] gpiozero not available — GPIO buzzer disabled")
         except Exception as e:
             logger.warning(f"[Alert] GPIO init failed: {e}")
 
@@ -218,11 +206,10 @@ class AlertManager:
     # ── Buzzer / audio ────────────────────────────────────────────────────────
 
     def _set_buzzer(self, on: bool):
-        if self._gpio is None:
+        if self._buzzer is None:
             return
-        import RPi.GPIO as GPIO
         try:
-            GPIO.output(self.gpio_pin, GPIO.HIGH if on else GPIO.LOW)
+            self._buzzer.on() if on else self._buzzer.off()
         except Exception as e:
             logger.debug(f"[Alert] GPIO write error: {e}")
 
