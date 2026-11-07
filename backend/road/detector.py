@@ -3,14 +3,6 @@
 Road damage detection using YOLOv8-nano fine-tuned on RDD2022 +
 1 200 custom-annotated Indian road frames.
 
-Classes detected (5 classes — matches yolov8n_rdd_india.pt)
-----------------
-    0 → pothole
-    1 → crack_longitudinal
-    2 → crack_transverse
-    3 → rutting
-    4 → repair
-
 Per-class confidence thresholds (runtime deployment only):
     pothole 0.35 / cracks 0.45 / rutting 0.50 / repair 0.50
     (For paper mAP50 benchmarks, use a uniform threshold instead)
