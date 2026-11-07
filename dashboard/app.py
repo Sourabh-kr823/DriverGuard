@@ -6,15 +6,19 @@ Flask + Socket.IO live dashboard — enhanced v2.
 
 import csv
 import io
+import os
 import time
 import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from dotenv import load_dotenv
 
 from flask import Flask, jsonify, render_template_string, Response
 from flask_socketio import SocketIO
+
+load_dotenv()
 
 if TYPE_CHECKING:
     from backend.alert.alert_manager import AlertManager
@@ -26,7 +30,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VSM Live Dashboard</title>
+<title>DriverGuard Live Dashboard</title>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -154,7 +158,7 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
 <body>
 
 <div class="hdr">
-  <div class="logo">VSM <span style="color:var(--text2)">Live</span></div>
+  <div class="logo">DriverGuard <span style="color:var(--text2)">Live</span></div>
   <span class="badge live" id="conn-badge">● CONNECTING...</span>
   <span class="badge">DMS 20 FPS</span>
   <span class="badge">ROAD 20 FPS</span>
@@ -963,7 +967,7 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
 
     # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
-    WEATHER_KEY    = "abcd"
+    WEATHER_KEY    = os.getenv("OPENWEATHER_API_KEY", "")
 
     @app.route("/api/weather")
     def api_weather():

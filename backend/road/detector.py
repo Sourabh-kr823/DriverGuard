@@ -3,8 +3,16 @@
 Road damage detection using YOLOv8-nano fine-tuned on RDD2022 +
 1 200 custom-annotated Indian road frames.
 
+Classes detected (5 classes — matches yolov8n_rdd_india.pt)
+----------------
+    0 → pothole
+    1 → crack_longitudinal
+    2 → crack_transverse
+    3 → rutting
+    4 → repair
+
 Per-class confidence thresholds (runtime deployment only):
-    pothole 0.35 / cracks 0.45 / rutting 0.50 / repair 0.55
+    pothole 0.35 / cracks 0.45 / rutting 0.50 / repair 0.50
     (For paper mAP50 benchmarks, use a uniform threshold instead)
 
 Severity is determined by bounding-box area and confidence score:
@@ -84,12 +92,18 @@ class RoadDamageDetector:
         self.conf_thr   = cfg.get("confidence_threshold", 0.50)
         self.iou_thr    = cfg.get("iou_threshold", 0.35)   # tighter NMS — fewer duplicate boxes
         self.imgsz      = int(cfg.get("imgsz", 320))       # must match the NCNN export size
+        # Runtime per-class filtering toggle (default on)
         self.use_per_class = cfg.get("per_class_thresholds", True)
         self._base_conf = min(self.PER_CLASS_CONF.values()) if self.use_per_class else self.conf_thr
 
         severity_cfg          = cfg.get("severity", {})
         self._minor_area_max  = severity_cfg.get("minor",    {}).get("area_px2_max", 3000)
         self._mod_area_max    = severity_cfg.get("moderate", {}).get("area_px2_max", 10000)
+
+        # ── Temporal confirmation ──────────────────────────────────────────────
+        # Require a hazard class to appear in `confirm_frames` of the last
+        # `confirm_window` frames before it is treated as real. Filters out
+        # single-frame false positives (shadows, tar seams, wet patches).
         self.temporal_enabled = cfg.get("temporal_confirmation", True)
         self.confirm_window   = max(1, int(cfg.get("confirm_window", 5)))
         self.confirm_frames   = max(1, int(cfg.get("confirm_frames", 3)))
@@ -110,6 +124,8 @@ class RoadDamageDetector:
         logger.info(f"[Road] Loading YOLOv8 model: {self.model_path}")
         try:
             from ultralytics import YOLO
+            # NCNN model (an "_ncnn_model" folder) runs CPU-only, ARM-optimised —
+            # used on the Pi. A .pt model uses the GPU when one is available.
             is_ncnn = (str(self.model_path).rstrip("/").endswith("_ncnn_model")
                        or Path(self.model_path).is_dir())
             if is_ncnn:

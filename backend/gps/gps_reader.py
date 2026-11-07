@@ -1,25 +1,4 @@
-"""
-backend/gps/gps_reader.py
-──────────────────────────
-Serial reader for u-blox NEO-6M GPS module.
 
-Reads NMEA sentences from /dev/ttyUSB0 (or configured port), parses
-GGA/RMC sentences with pynmea2, and exposes the latest fix in a
-thread-safe dataclass.
-
-Simulation mode
----------------
-When cfg["simulation"] == True the reader generates a synthetic GPS
-trace around Bengaluru for testing without hardware.
-
-Usage
------
-    gps = GPSReader(cfg["gps"])
-    gps.start()           # launches background thread
-
-    fix = gps.latest
-    print(fix.lat, fix.lon, fix.speed_kmh)
-"""
 
 import math
 import time
@@ -51,7 +30,7 @@ class GPSFix:
 
 class GPSReader:
     """
-    Background serial reader for NEO-6M.
+    Background serial reader for NEO-7M.
 
     Parameters
     ----------
