@@ -214,7 +214,7 @@ section("7. GPS Module")
 
 simulate = cfg.get("gps", {}).get("simulation", True)
 if simulate:
-    check("GPS mode", True, "simulation mode — NEO-6M not needed", warn=True)
+    check("GPS mode", True, "simulation mode — NEO-7M not needed", warn=True)
 else:
     port = cfg.get("gps", {}).get("port", "/dev/serial0")
     try:
