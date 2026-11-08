@@ -36,20 +36,16 @@ dms:
     clahe_grid: 8
 
 road:
-  model_path: "models/yolov8n_rdd_india_320_ncnn_model"
-  imgsz: 320
+  model_path: "models/pothole_yolo11n_416_ncnn_model"   # YOLO11n, pothole-only
+  imgsz: 416
   confidence_threshold: 0.50     # used when per_class_thresholds is false (paper benchmarks)
   iou_threshold: 0.35            # NEW: tighter NMS -> fewer duplicate boxes
-  per_class_thresholds: true     # NEW: runtime per-class conf (pothole 0.35 ... repair 0.50)
+  per_class_thresholds: true     # runtime per-class conf (pothole 0.35)
   temporal_confirmation: true    # NEW: require a hazard across several frames before it counts
   confirm_frames: 2              # must appear in at least this many (halved for 15fps + skip)
   confirm_window: 4              # ...of the last this-many frames
   classes:
     0: "pothole"
-    1: "crack_longitudinal"
-    2: "crack_transverse"
-    3: "rutting"
-    4: "repair"
   severity:
     minor:
       area_px2_max: 3000
@@ -86,7 +82,8 @@ voice_alert:
 
 alert:
   buzzer_gpio_pin: 17
-  buzzer_duration_ms: 200
+  buzzer_duration_ms: 200        # length of each startup beep
+  startup_beeps: 2               # beeps when DriverGuard starts (0 = silent)
   audio_alert: false
   dashboard_host: "0.0.0.0"
   dashboard_port: 5000

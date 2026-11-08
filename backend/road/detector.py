@@ -1,18 +1,16 @@
 """
 ─────────────────────────
-Road damage detection using YOLOv8-nano fine-tuned on RDD2022 +
-1 200 custom-annotated Indian road frames.
+Road hazard detection using YOLO11-nano (pothole_yolo11n, NCNN @ 416).
 
-Classes detected (5 classes — matches yolov8n_rdd_india.pt)
+Classes detected (1 class — matches models/pothole_yolo11n.pt)
 ----------------
     0 → pothole
-    1 → crack_longitudinal
-    2 → crack_transverse
-    3 → rutting
-    4 → repair
+
+Class names come from road.classes in config.yaml and are then synced with
+the names embedded in the loaded model, so swapping models needs no code edit.
 
 Per-class confidence thresholds (runtime deployment only):
-    pothole 0.35 / cracks 0.45 / rutting 0.50 / repair 0.50
+    pothole 0.35  (unknown classes fall back to confidence_threshold)
     (For paper mAP50 benchmarks, use a uniform threshold instead)
 
 Severity is determined by bounding-box area and confidence score:
@@ -54,31 +52,21 @@ class Detection:
 
 class RoadDamageDetector:
     """
-    YOLOv8-nano inference wrapper with severity classification.
+    YOLO11-nano inference wrapper with severity classification.
     
     """
 
+    # Defaults for models/pothole_yolo11n — overridden by road.classes in
+    # config.yaml and then by the names embedded in the loaded model.
     CLASS_NAMES = {
         0: "pothole",
-        1: "crack_longitudinal",
-        2: "crack_transverse",
-        3: "rutting",
-        4: "repair",
     }
     COLOURS = {
         "pothole":            (0, 0, 220),      # red
-        "crack_longitudinal": (0, 0, 0),        # black
-        "crack_transverse":   (0, 165, 255),    # orange
-        "rutting":            (42, 42, 165),    # brown
-        "repair":             (180, 0, 220),    # purple
     }
 
     PER_CLASS_CONF = {
-        0: 0.35,   # pothole           — catch more, safety critical
-        1: 0.45,   # crack_longitudinal
-        2: 0.45,   # crack_transverse
-        3: 0.50,   # rutting
-        4: 0.50,   # repair            — only flag if very confident
+        0: 0.35,   # pothole — catch more, safety critical
     }
     SEVERITY_COLOURS = {
         "minor":    (0, 200, 80),
@@ -89,6 +77,8 @@ class RoadDamageDetector:
     def __init__(self, cfg: dict):
         self.cfg        = cfg
         self.model_path = cfg["model_path"]
+        if cfg.get("classes"):
+            self.CLASS_NAMES = {int(k): str(v) for k, v in cfg["classes"].items()}
         self.conf_thr   = cfg.get("confidence_threshold", 0.50)
         self.iou_thr    = cfg.get("iou_threshold", 0.35)   # tighter NMS — fewer duplicate boxes
         self.imgsz      = int(cfg.get("imgsz", 320))       # must match the NCNN export size
@@ -121,7 +111,7 @@ class RoadDamageDetector:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self):
-        logger.info(f"[Road] Loading YOLOv8 model: {self.model_path}")
+        logger.info(f"[Road] Loading YOLO model: {self.model_path}")
         try:
             from ultralytics import YOLO
             # NCNN model (an "_ncnn_model" folder) runs CPU-only, ARM-optimised —
@@ -139,7 +129,15 @@ class RoadDamageDetector:
                 engine = "PyTorch"
             dummy = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.uint8)
             self._model.predict(dummy, verbose=False, device=self._device, imgsz=self.imgsz)
-            logger.success(f"[Road] YOLOv8-nano loaded ({engine}) on {str(self._device).upper()} ✓")
+            model_names = getattr(self._model, "names", None)
+            if model_names:
+                model_names = {int(k): str(v) for k, v in dict(model_names).items()}
+                if model_names != self.CLASS_NAMES:
+                    logger.warning(f"[Road] road.classes {self.CLASS_NAMES} != model names "
+                                   f"{model_names} — using the model's names")
+                self.CLASS_NAMES = model_names
+            logger.success(f"[Road] YOLO loaded ({engine}) on {str(self._device).upper()} ✓  "
+                           f"classes={self.CLASS_NAMES}")
         except FileNotFoundError:
             logger.warning(f"[Road] Model file not found: {self.model_path}. "
                            "Using dummy detections.")

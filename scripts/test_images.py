@@ -17,13 +17,16 @@ Controls:
 """
 
 import argparse
-from unicodedata import name
 import cv2
-import time
+import yaml
 from pathlib import Path
 from ultralytics import YOLO
 
-MODEL_PATH  = "models/yolov8n_rdd_india.pt"
+ROOT = Path(__file__).resolve().parent.parent
+with open(ROOT / "config.yaml") as _f:
+    _road = yaml.safe_load(_f)["road"]
+MODEL_PATH  = str(ROOT / _road["model_path"])   # same model the app uses
+IMGSZ       = int(_road.get("imgsz", 640))      # must match the export size
 CONF_THRESH = 0.35
 SAVE_DIR    = Path("data/test_results")
 
@@ -65,7 +68,7 @@ def draw_detections(frame, results):
     return frame
 
 
-def run_on_images(model, folder: Path):
+def run_on_images(model, folder: Path, conf: float, imgsz: int):
     """Run detection on all images in a folder — press any key to advance."""
     imgs = list(folder.glob("*.jpg")) + list(folder.glob("*.png")) + \
            list(folder.glob("*.jpeg"))
@@ -81,7 +84,7 @@ def run_on_images(model, folder: Path):
         if frame is None:
             continue
 
-        results = model(frame, conf=CONF_THRESH, verbose=False)
+        results = model(frame, conf=conf, imgsz=imgsz, verbose=False)
         frame   = draw_detections(frame, results)
 
         n_dets = sum(len(r.boxes) for r in results)
@@ -100,7 +103,7 @@ def run_on_images(model, folder: Path):
     cv2.destroyAllWindows()
 
 
-def run_on_video(model, source):
+def run_on_video(model, source, conf: float, imgsz: int):
     """Run detection on video file or webcam."""
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -119,7 +122,7 @@ def run_on_video(model, source):
                 break
             frame_n += 1
 
-            results = model(frame, conf=CONF_THRESH, verbose=False)
+            results = model(frame, conf=conf, imgsz=imgsz, verbose=False)
             frame   = draw_detections(frame, results)
 
             n_dets = sum(len(r.boxes) for r in results)
@@ -147,21 +150,25 @@ def main():
                         help="Image file, folder of images, video file, or 0 for webcam")
     parser.add_argument("--conf",   type=float, default=CONF_THRESH,
                         help=f"Confidence threshold (default: {CONF_THRESH})")
+    parser.add_argument("--model",  default=MODEL_PATH,
+                        help="Model .pt or NCNN dir (default: road.model_path in config.yaml)")
+    parser.add_argument("--imgsz",  type=int, default=IMGSZ,
+                        help=f"Inference size (default: {IMGSZ} from config.yaml)")
     args = parser.parse_args()
 
-    print(f"\nLoading model: {MODEL_PATH}")
-    model = YOLO(MODEL_PATH)
-    print("Model loaded ✓\n")
+    print(f"\nLoading model: {args.model} (imgsz={args.imgsz}, conf={args.conf})")
+    model = YOLO(args.model, task="detect")
+    print(f"Model loaded ✓  classes: {model.names}\n")
 
     source = args.source
     p = Path(source)
 
     if p.is_dir():
-        run_on_images(model, p)
+        run_on_images(model, p, args.conf, args.imgsz)
     elif p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png", ".bmp"):
         # Single image
         frame   = cv2.imread(str(p))
-        results = model(frame, conf=args.conf, verbose=False)
+        results = model(frame, conf=args.conf, imgsz=args.imgsz, verbose=False)
         frame   = draw_detections(frame, results)
         n_dets  = sum(len(r.boxes) for r in results)
         print(f"Detections: {n_dets}")
@@ -171,7 +178,7 @@ def main():
     else:
         # Video or webcam
         src = int(source) if source.isdigit() else source
-        run_on_video(model, src)
+        run_on_video(model, src, args.conf, args.imgsz)
 
 
 if __name__ == "__main__":

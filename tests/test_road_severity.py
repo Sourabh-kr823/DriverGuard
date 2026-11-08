@@ -21,7 +21,7 @@ from backend.road.detector import RoadDamageDetector, Detection
 @pytest.fixture
 def detector():
     cfg = {
-        "model_path": "models/yolov8n_rdd_india.pt",
+        "model_path": "models/pothole_yolo11n.pt",
         "confidence_threshold": 0.50,
         "iou_threshold": 0.45,
         "severity": {
@@ -67,8 +67,8 @@ class TestDetectionDataclass:
         assert d.lon is None
 
     def test_class_names_map(self, detector):
-        assert detector.CLASS_NAMES[0] == "pothole"
-        assert detector.CLASS_NAMES[1] == "crack_longitudinal"
-        assert detector.CLASS_NAMES[2] == "crack_transverse"
-        assert detector.CLASS_NAMES[3] == "rutting"
-        assert detector.CLASS_NAMES[4] == "repair"
+        assert detector.CLASS_NAMES == {0: "pothole"}
+
+    def test_class_names_from_config(self):
+        det = RoadDamageDetector({"model_path": "x.pt", "classes": {0: "pothole"}})
+        assert det.CLASS_NAMES == {0: "pothole"}

@@ -16,6 +16,7 @@ import sys
 import time
 
 import yaml
+from pathlib import Path
 
 PASS = "\033[92m  PASS\033[0m"
 FAIL = "\033[91m  FAIL\033[0m"
@@ -74,10 +75,11 @@ packages = [
     ("yaml",         "pyyaml"),
     ("scipy",        "scipy"),
     ("numpy",        "numpy"),
-    ("pyttsx3",      "pyttsx3"),
     ("dotenv",       "python-dotenv"),
     ("requests",     "requests"),
 ]
+if sys.platform == "win32":                 # Linux/Pi speaks via espeak-ng instead
+    packages.append(("pyttsx3", "pyttsx3"))
 
 for module, pkg in packages:
     try:
@@ -89,9 +91,12 @@ for module, pkg in packages:
 # ── 2. Model Files ────────────────────────────────────────────────────────────
 section("2. Model Files")
 
-model_path = cfg.get("road", {}).get("model_path", "models/yolov8n_rdd_india.pt")
-model_size = os.path.getsize(model_path) if os.path.exists(model_path) else 0
-check("Road model (yolov8n_rdd_india.pt)",
+model_path = cfg.get("road", {}).get("model_path", "models/pothole_yolo11n_416_ncnn_model")
+if os.path.isdir(model_path):   # NCNN export is a folder — sum its files
+    model_size = sum(f.stat().st_size for f in Path(model_path).rglob("*") if f.is_file())
+else:
+    model_size = os.path.getsize(model_path) if os.path.exists(model_path) else 0
+check(f"Road model ({os.path.basename(model_path.rstrip('/'))})",
       os.path.exists(model_path),
       f"{model_size/1e6:.1f} MB" if model_size else "NOT FOUND")
 
@@ -136,12 +141,14 @@ test_camera(road_src, "Road / forward-facing")
 section("4. MediaPipe Face Detection")
 
 try:
-    import mediapipe as mp
-    mesh = mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False, max_num_faces=1,
-        refine_landmarks=False,
-        min_detection_confidence=0.5, min_tracking_confidence=0.5)
-    check("MediaPipe FaceMesh init", True)
+    # Same wrapper the app uses (MediaPipe Tasks FaceLandmarker — mp.solutions
+    # was removed in mediapipe >= 0.10.30, the only builds for Pi / Py3.13).
+    from backend.dms.mp_face_mesh import TasksFaceMesh, DEFAULT_MODEL_PATH
+    task_path = cfg.get("dms", {}).get("mediapipe_model_path", DEFAULT_MODEL_PATH)
+    if not os.path.exists(task_path):
+        raise FileNotFoundError(f"{task_path} missing — see backend/dms/mp_face_mesh.py for the URL")
+    mesh = TasksFaceMesh(model_path=task_path)
+    check("MediaPipe FaceLandmarker init", True, task_path)
 
     # Try on a blank frame
     blank = __import__("numpy").zeros((480, 640, 3), dtype=__import__("numpy").uint8)
@@ -154,14 +161,14 @@ except Exception as e:
     check("MediaPipe FaceMesh", False, str(e))
 
 # ── 5. YOLOv8 Road Model ─────────────────────────────────────────────────────
-section("5. YOLOv8 Road Model Inference")
+section("5. YOLO Road Model Inference")
 
 try:
     from ultralytics import YOLO
     import numpy as np
     from pathlib import Path
 
-    imgsz   = int(cfg.get("road", {}).get("imgsz", 320))
+    imgsz   = int(cfg.get("road", {}).get("imgsz", 416))
     is_ncnn = str(model_path).rstrip("/").endswith("_ncnn_model") or Path(model_path).is_dir()
 
     if is_ncnn:
@@ -243,23 +250,29 @@ voice_enabled = cfg.get("voice_alert", {}).get("enabled", True)
 if not voice_enabled:
     check("Voice alerts", True, "disabled in config", warn=True)
 else:
-    try:
-        import pyttsx3
-        engine = pyttsx3.init()
-        voices = engine.getProperty("voices")
-        voice_names = [v.name for v in (voices or [])]
-        has_zira  = any("Zira"  in n for n in voice_names)
-        has_david = any("David" in n for n in voice_names)
-        engine.stop()
-        del engine
-        check("pyttsx3 engine", True,
-              f"{len(voice_names)} voices found")
-        check("Female voice (Zira — driver alerts)",
-              has_zira, "Microsoft Zira Desktop" if has_zira else "not found — will use default")
-        check("Male voice (David — road alerts)",
-              has_david, "Microsoft David Desktop" if has_david else "not found — will use default")
-    except Exception as e:
-        check("pyttsx3", False, str(e))
+    import shutil
+    espeak = shutil.which("espeak-ng") or shutil.which("espeak")
+    if sys.platform != "win32":
+        check("espeak-ng (Linux TTS)", bool(espeak),
+              espeak if espeak else "sudo apt install espeak-ng")
+    else:
+        try:
+            import pyttsx3
+            engine = pyttsx3.init()
+            voices = engine.getProperty("voices")
+            voice_names = [v.name for v in (voices or [])]
+            has_zira  = any("Zira"  in n for n in voice_names)
+            has_david = any("David" in n for n in voice_names)
+            engine.stop()
+            del engine
+            check("pyttsx3 engine", True,
+                  f"{len(voice_names)} voices found")
+            check("Female voice (Zira — driver alerts)",
+                  has_zira, "Microsoft Zira Desktop" if has_zira else "not found — will use default")
+            check("Male voice (David — road alerts)",
+                  has_david, "Microsoft David Desktop" if has_david else "not found — will use default")
+        except Exception as e:
+            check("pyttsx3", False, str(e))
 
 # ── 9. Environment / API Keys ─────────────────────────────────────────────────
 section("9. Environment & API Keys")

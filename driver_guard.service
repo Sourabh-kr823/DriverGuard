@@ -1,32 +1,27 @@
-# deploy/driver_guard.service
+# driver_guard.service
 # ────────────────────
-# systemd service for Driver Guard
+# systemd service for Driver Guard — starts automatically on Pi boot.
 #
-# Install on Raspberry Pi:
-#   1. Copy this file:
-#        sudo cp driver_guard.service /etc/systemd/system/driver_guard.service
+# Install:
+#   sudo cp driver_guard.service /etc/systemd/system/driver_guard.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now driver_guard
 #
-#   2. Edit the paths below to match your installation:
-#        User=        → your Pi username
-#        WorkingDirectory=/home/sourabh/Desktop/DriverGuard/
-#        ExecStart=   → path to your venv python + main.py
+# Status / logs:
+#   systemctl status driver_guard
+#   journalctl -u driver_guard -f
 #
-#   3. Enable and start:
-#        sudo systemctl daemon-reload
-#        sudo systemctl enable driver_guard
-#        sudo systemctl start driver_guard
-#
-#   4. Check status / logs:
-#        sudo systemctl status driver_guard
-#        journalctl -u driver_guard -f
-#
-#   5. Stop:
-#        sudo systemctl stop driver_guard
+# Stop / disable autostart:
+#   sudo systemctl stop driver_guard
+#   sudo systemctl disable driver_guard
 
 [Unit]
 Description=Driver Guard
 Documentation=https://github.com/Sourabh-kr823/DriverGuard
-After=network.target
+After=network.target sound.target
+# Rate-limit crash loops (these belong in [Unit], not [Service])
+StartLimitIntervalSec=120
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -34,26 +29,26 @@ User=sourabh
 Group=sourabh
 WorkingDirectory=/home/sourabh/Desktop/DriverGuard
 
-# Activate virtualenv and run
 ExecStart=/home/sourabh/Desktop/DriverGuard/.venv/bin/python main.py --config /home/sourabh/Desktop/DriverGuard/config.yaml
 
-# Restart automatically if it crashes
-Restart=on-failure
+# Always come back — this runs unattended in the vehicle
+Restart=always
 RestartSec=5s
-StartLimitIntervalSec=60s
-StartLimitBurst=5
 
-# Environment — override config path if needed
 Environment="PYTHONUNBUFFERED=1"
+# Lets espeak-ng voice alerts use the desktop PipeWire/Pulse audio session
+# (falls back to ALSA if no session is running)
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+# API keys (OPENWEATHER_API_KEY, ...); leading '-' = ok if missing
+EnvironmentFile=-/home/sourabh/Desktop/DriverGuard/.env
 
-# Give time for camera / GPS to initialise on boot
+# Give camera / GPS time to initialise on boot
 ExecStartPre=/bin/sleep 5
 
-# Graceful stop — sends SIGTERM, waits 10s, then SIGKILL
+# Graceful stop — SIGTERM, wait 10s, then SIGKILL
 TimeoutStopSec=10s
 KillMode=mixed
 
-# Logging — output goes to journald
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=driver_guard

@@ -108,9 +108,19 @@ def benchmark(model, torch, model_path, device_arg, do_cpu):
 
 # ── 2. Road-model validation ────────────────────────────────────────────────
 
-def validate_road(model, device_arg, data_yaml, ncnn=False, imgsz=640):
+def validate_road(model, device_arg, data_yaml, ncnn=False, imgsz=416):
     if not Path(data_yaml).exists():
         return {"error": f"dataset yaml not found: {data_yaml}"}
+    try:
+        import yaml
+        dcfg = yaml.safe_load(Path(data_yaml).read_text()) or {}
+        nc = int(dcfg.get("nc", len(dcfg.get("names", {}))))
+        if nc != len(model.names):
+            return {"error": f"{Path(data_yaml).name} has nc={nc} but the model has "
+                             f"{len(model.names)} class(es) {dict(model.names)} — "
+                             f"pass --data <matching dataset yaml>"}
+    except Exception:
+        pass
     try:
         import torch
         dev = "cpu" if ncnn else (device_arg if device_arg
@@ -168,7 +178,7 @@ def make_charts(road, bench, outdir):
         ap = [c["ap50"] for c in road["per_class"]]
         plt.figure(figsize=(7, 4))
         plt.bar(names, ap, color="#B91C3C")
-        plt.ylabel("AP50 (%)"); plt.title("Per-class AP50 — Road Model (RDD2022 val)")
+        plt.ylabel("AP50 (%)"); plt.title("Per-class AP50 — Road Model (val split)")
         plt.ylim(0, 100); plt.xticks(rotation=20, ha="right"); plt.tight_layout()
         p = outdir / "per_class_ap50.png"; plt.savefig(p, dpi=130); plt.close(); made.append(p)
 
@@ -191,7 +201,7 @@ def make_charts(road, bench, outdir):
 def build_report(bench, road, tests, charts):
     L = ["# DriverGuard — Evaluation Report", ""]
 
-    L.append("## 1. Road-Model Validation (RDD2022 val split)")
+    L.append("## 1. Road-Model Validation (val split)")
     if road.get("error"):
         L.append(f"_Skipped — {road['error']}_")
     else:
@@ -245,12 +255,14 @@ def main():
     ap.add_argument("--no-cpu", action="store_true", help="skip the slow CPU benchmark (.pt only)")
     ap.add_argument("--no-tests", action="store_true")
     ap.add_argument("--no-charts", action="store_true")
-    ap.add_argument("--imgsz", type=int, default=640,
-                    help="validation input size (e.g. 320 vs 640 to compare accuracy)")
+    ap.add_argument("--imgsz", type=int, default=None,
+                    help="validation input size (default: road.imgsz in config.yaml)")
     args = ap.parse_args()
 
     cfg = load_config()
-    model_path = cfg.get("road", {}).get("model_path", "models/yolov8n_rdd_india.pt")
+    model_path = cfg.get("road", {}).get("model_path", "models/pothole_yolo11n_416_ncnn_model")
+    if args.imgsz is None:
+        args.imgsz = int(cfg.get("road", {}).get("imgsz", 416))
 
     print("Running evaluation …\n")
     model, torch, err = load_model(model_path)

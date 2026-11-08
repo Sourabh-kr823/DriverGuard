@@ -5,7 +5,7 @@ import numpy as np
 from backend.road.detector import RoadDamageDetector, Detection
 
 BASE = {
-    "model_path": "models/yolov8n_rdd_india.pt",
+    "model_path": "models/pothole_yolo11n.pt",
     "temporal_confirmation": True,
     "confirm_frames": 3,
     "confirm_window": 5,

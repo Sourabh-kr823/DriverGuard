@@ -52,6 +52,9 @@ class AlertManager:
         self._buzzing    = False
         self._stop       = threading.Event()
         self._buzzer     = None
+        self._chiming    = threading.Event()   # set while the startup beep plays
+        self.beep_ms     = int(self.alert_cfg.get("buzzer_duration_ms", 200))
+        self.startup_beeps = int(self.alert_cfg.get("startup_beeps", 2))
 
         # Debounce: don't re-trigger audio within N seconds
         self._last_audio_ts = 0.0
@@ -205,8 +208,27 @@ class AlertManager:
 
     # ── Buzzer / audio ────────────────────────────────────────────────────────
 
+    def startup_chime(self):
+        """Short beep pattern (background) so the driver hears the system is live."""
+        if self._buzzer is None or self.startup_beeps <= 0:
+            return
+        def _chime():
+            self._chiming.set()
+            try:
+                for i in range(self.startup_beeps):
+                    self._buzzer.on();  time.sleep(self.beep_ms / 1000)
+                    self._buzzer.off()
+                    if i < self.startup_beeps - 1:
+                        time.sleep(self.beep_ms / 1000)
+            except Exception as e:
+                logger.debug(f"[Alert] Startup chime error: {e}")
+            finally:
+                self._chiming.clear()
+        threading.Thread(target=_chime, daemon=True, name="StartupChime").start()
+        logger.info(f"[Alert] Startup chime ({self.startup_beeps} x {self.beep_ms} ms)")
+
     def _set_buzzer(self, on: bool):
-        if self._buzzer is None:
+        if self._buzzer is None or self._chiming.is_set():
             return
         try:
             self._buzzer.on() if on else self._buzzer.off()

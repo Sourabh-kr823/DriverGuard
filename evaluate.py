@@ -11,9 +11,9 @@ Usage
     python evaluate.py                         # full evaluation (auto-detect model)
     python evaluate.py --quick                 # skip long video runs
     python evaluate.py --no-cpu                # skip PyTorch comparison (NCNN only)
-    python evaluate.py --model models/yolov8n_rdd_india_ncnn_320
+    python evaluate.py --model models/pothole_yolo11n_416_ncnn_model
     python evaluate.py --imgsz 640             # override inference size
-    python evaluate.py --compare 320 640       # compare two NCNN export sizes
+    python evaluate.py --compare 320 416       # compare two NCNN export sizes
 """
 
 import argparse
@@ -101,13 +101,30 @@ def load_video_frames(path: str, max_frames: int = 200) -> list:
     return frames
 
 
-def find_ncnn_model(stem: str = "yolov8n_rdd_india", imgsz: int | None = None) -> str | None:
+def _config_model() -> str | None:
+    """road.model_path from config.yaml, if it exists — the model the app runs."""
+    try:
+        with open(BASE_DIR / "config.yaml") as f:
+            mp = yaml.safe_load(f).get("road", {}).get("model_path")
+        if mp and (BASE_DIR / mp).exists():
+            return str(BASE_DIR / mp)
+    except Exception:
+        pass
+    return None
+
+
+def find_ncnn_model(stem: str = "pothole_yolo11n", imgsz: int | None = None) -> str | None:
     """Find the best NCNN model in models/ directory.
 
-    Naming convention (Ultralytics requires _ncnn_model suffix):
-        320 (default): models/<stem>_ncnn_model
-        640:           models/<stem>_640_ncnn_model
+    With no imgsz, the config.yaml road.model_path wins. Otherwise
+    (Ultralytics requires _ncnn_model suffix):
+        models/<stem>_<size>_ncnn_model   (e.g. pothole_yolo11n_416_ncnn_model)
+        models/<stem>_ncnn_model          (legacy unsized 320 export)
     """
+    if imgsz is None:
+        cfg_model = _config_model()
+        if cfg_model and cfg_model.rstrip("/").endswith("_ncnn_model"):
+            return cfg_model
     models_dir = BASE_DIR / "models"
     if imgsz and imgsz != 320:
         # Sized variant: <stem>_<size>_ncnn_model
@@ -121,7 +138,7 @@ def find_ncnn_model(stem: str = "yolov8n_rdd_india", imgsz: int | None = None) -
             return str(path)
     if imgsz is None:
         # Try sized variants as fallback
-        for sz in [640, 416]:
+        for sz in [416, 640, 320]:
             path = models_dir / f"{stem}_{sz}_ncnn_model"
             if path.exists():
                 return str(path)
@@ -143,16 +160,20 @@ def detect_imgsz(model_path: str) -> int:
     for sz in [640, 416, 320]:
         if f"_{sz}_ncnn_model" in name:
             return sz
-    return 320
+    return 416
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Benchmark: YOLO Road Detection
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def bench_yolo(model_path: str, frames: list, label: str, imgsz: int = 320) -> dict:
+def _load_yolo(model_path: str):
     from ultralytics import YOLO
-    model = YOLO(model_path)
+    return YOLO(model_path, task="detect")   # NCNN needs the task set explicitly
+
+
+def bench_yolo(model_path: str, frames: list, label: str, imgsz: int = 416) -> dict:
+    model = _load_yolo(model_path)
 
     # Warmup (3 frames)
     dummy = np.zeros((imgsz, imgsz, 3), dtype=np.uint8)
@@ -173,9 +194,7 @@ def bench_yolo(model_path: str, frames: list, label: str, imgsz: int = 320) -> d
                 for box in r.boxes:
                     cls_id = int(box.cls[0])
                     conf = float(box.conf[0])
-                    cls_names = {0: "pothole", 1: "crack_long", 2: "crack_trans",
-                                 3: "rutting", 4: "repair"}
-                    name = cls_names.get(cls_id, f"cls_{cls_id}")
+                    name = model.names.get(cls_id, f"cls_{cls_id}")
                     class_counts[name] = class_counts.get(name, 0) + 1
                     confidences.append(conf)
 
@@ -273,7 +292,7 @@ def bench_pipeline(cfg: dict, frames: list) -> dict:
 #  Benchmark: YOLO mAP (if validation data exists)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def bench_accuracy(model_path: str, imgsz: int = 320) -> dict | None:
+def bench_accuracy(model_path: str, imgsz: int = 416) -> dict | None:
     data_yaml = BASE_DIR / "data" / "finetune_india.yaml"
     if not data_yaml.exists():
         return None
@@ -283,8 +302,11 @@ def bench_accuracy(model_path: str, imgsz: int = 320) -> dict | None:
     if not val_path.exists():
         return None
 
-    from ultralytics import YOLO
-    model = YOLO(model_path)
+    model = _load_yolo(model_path)
+    if int(dcfg.get("nc", len(dcfg.get("names", {})))) != len(model.names):
+        print(f"  Skipped — {data_yaml.name} has nc={dcfg.get('nc')} but the model "
+              f"has {len(model.names)} class(es) {dict(model.names)}")
+        return None
     try:
         metrics = model.val(data=str(data_yaml), imgsz=imgsz, verbose=False)
         return {
@@ -302,9 +324,8 @@ def bench_accuracy(model_path: str, imgsz: int = 320) -> dict | None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def bench_video_detections(model_path: str, video_path: str,
-                           max_frames: int = 300, imgsz: int = 320) -> dict:
-    from ultralytics import YOLO
-    model = YOLO(model_path)
+                           max_frames: int = 300, imgsz: int = 416) -> dict:
+    model = _load_yolo(model_path)
     cap = cv2.VideoCapture(video_path)
 
     class_counts = {}
@@ -333,9 +354,7 @@ def bench_video_detections(model_path: str, video_path: str,
                 has_det = True
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
-                cls_names = {0: "pothole", 1: "crack_long", 2: "crack_trans",
-                             3: "rutting", 4: "repair"}
-                name = cls_names.get(cls_id, f"cls_{cls_id}")
+                name = model.names.get(cls_id, f"cls_{cls_id}")
                 class_counts[name] = class_counts.get(name, 0) + 1
                 confidences.append(conf)
 
@@ -595,7 +614,7 @@ def main():
     print(f"  Loaded {len(frames)} frames (640x480)")
 
     # ── Resolve models to benchmark ───────────────────────────────────────────
-    pt_path = "models/yolov8n_rdd_india.pt"
+    pt_path = "models/pothole_yolo11n.pt"
     results["yolo_benchmarks"] = []
 
     if args.compare:
@@ -631,7 +650,7 @@ def main():
 
         # PyTorch comparison (unless --no-cpu)
         if os.path.exists(pt_path) and not skip_pytorch:
-            imgsz_pt = args.imgsz or 320
+            imgsz_pt = args.imgsz or (detect_imgsz(ncnn_path) if ncnn_path else 416)
             print(f"  Benchmarking YOLO — PyTorch @ imgsz={imgsz_pt} (comparison)...")
             results["yolo_benchmarks"].append(
                 bench_yolo(pt_path, frames, f"PyTorch @ imgsz={imgsz_pt}", imgsz=imgsz_pt))

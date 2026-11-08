@@ -7,7 +7,7 @@ Architecture
 ────────────
 Two camera threads run in parallel:
   Thread-A: DMS pipeline  (IR cabin cam → face → EAR/MAR/pose → risk)
-  Thread-B: Road pipeline (road cam → YOLOv8 → detections)
+  Thread-B: Road pipeline (road cam → YOLO11n → detections)
   Thread-C: GPS reader    (background serial / simulation)
 
 All results flow into AlertManager which computes the composite risk
@@ -326,7 +326,7 @@ def main():
     gps     = GPSReader(cfg["gps"])
     # Startup validation
     import os as _os
-    _model = cfg.get("road", {}).get("model_path", "models/yolov8n_rdd_india_ncnn_model")
+    _model = cfg.get("road", {}).get("model_path", "models/pothole_yolo11n_416_ncnn_model")
     if not _os.path.exists(_model):
         logger.error(f"Road model not found: {_model} — check models/ folder")
         return
@@ -410,6 +410,7 @@ def main():
     _spawn_road()
     _spawn_sync()
     wd.start()
+    alert.startup_chime()   # beep → system is up and monitoring
 
     # ── Web dashboard ─────────────────────────────────────────────────────────
     if not args.no_web:
