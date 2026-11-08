@@ -6,9 +6,6 @@ Dual-channel offline TTS:
   • Road channel    → Male voice   (David on Windows, espeak "en+m3" on Linux)
   • Severe tier     → Faster rate + louder + emphasis on words
 
-Windows:  pyttsx3 (SAPI5), PowerShell fallback. The pyttsx3 engine is
-          re-created per message (required for SAPI5 threading).
-Linux/Pi: espeak-ng (or espeak) called directly — `sudo apt install espeak-ng`.
 """
 import shutil
 import sys
@@ -146,7 +143,6 @@ class VoiceAlert:
                 logger.debug(f"[Voice] espeak error: {e}")
             return
 
-        # ── pyttsx3 ───────────────────────────────────────────────────────────
         if _HAS_PYTTSX3:
             try:
                 engine = pyttsx3.init()
