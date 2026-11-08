@@ -1,37 +1,3 @@
-"""
-backend/dms/driver_monitor.py
-──────────────────────────────
-DriverMonitor — real-time per-frame DMS pipeline.
-
-Usage
------
-    from backend.dms.driver_monitor import DriverMonitor
-
-    dms = DriverMonitor(cfg["dms"])
-    dms.start()
-
-    while True:
-        frame = cam.read()
-        result = dms.process(frame)
-        # result.risk  ->  "low" | "moderate" | "high"
-
-Fix history
------------
-    v2.2 — Five false-trigger bugs fixed (identified from June-17 session logs):
-        BUG 1  DISTRACTED had zero frame counter — any instant yaw spike fired it.
-               Added _head_counter requiring CONSEC_HEAD sustained frames (default 8).
-        BUG 2  EAR calibration baseline was polluted by blink frames, pulling it
-               low (0.217 vs typical 0.277-0.287). Added top-75% percentile filter
-               to exclude blink frames from the mean.
-        BUG 3  "Drowsy watch" FATIGUED fired on slow normal blinks (333ms).
-               Raised threshold from ear_consec//2 (10fr) to ear_consec*3//4 (15fr).
-        BUG 4  MP_MOUTH had duplicate landmark indices 61 & 291, and used wrong
-               points for the denominator — giving MAR 1.3-4.2 for a closed mouth.
-               Fixed in ear_mar.py: proper 6-point lips [61,82,312,291,317,87].
-        BUG 5  MAR calibration included open-mouth / speech frames, skewing the
-               baseline high (1.746 vs typical 1.294-1.346 in old scale; now
-               ~0.05-0.15 in corrected scale). Added bottom-50% percentile filter.
-"""
 
 import threading
 import time
@@ -72,14 +38,6 @@ class DMSResult:
 # ─── DriverMonitor ────────────────────────────────────────────────────────────
 
 class DriverMonitor:
-    """
-    Orchestrates face detection, landmark extraction, EAR/MAR, and head pose.
-
-    Parameters
-    ----------
-    cfg : dict  — the `dms` section from config.yaml
-    """
-
     def __init__(self, cfg: dict, draw_overlays: bool = True):
         self.cfg = cfg
         self.backend = cfg.get("backend", "both")
@@ -121,11 +79,6 @@ class DriverMonitor:
         self._mp_face_mesh   = None
 
         self._last_result: DMSResult = DMSResult()
-
-        # ── Auto-calibration ──────────────────────────────────────────────────
-        # Collects EAR/MAR readings for first 90 frames (~3 s at 30 fps)
-        # while the driver sits normally (eyes open, mouth closed), then sets
-        # personal thresholds.  Works for any face — bearded, glasses, etc.
         self._ear_samples   = []
         self._mar_samples   = []
         self._ear_baseline  = None   # set after calibration
@@ -185,12 +138,7 @@ class DriverMonitor:
             self._mp_face_mesh.close()
 
     def recalibrate(self):
-        """
-        Trigger fresh calibration for a new driver without restarting the app.
-        Models stay loaded — only calibration state and counters are reset.
-        Thresholds revert to config defaults until the new 90-frame window
-        completes (~3 s at 30 fps).
-        """
+    
         with self._lock:
             self._ear_samples  = []
             self._mar_samples  = []
@@ -208,17 +156,6 @@ class DriverMonitor:
     # ── Main process loop ─────────────────────────────────────────────────────
 
     def process(self, frame: np.ndarray) -> DMSResult:
-        """
-        Run the full DMS pipeline on one frame.
-
-        Parameters
-        ----------
-        frame : np.ndarray  BGR image from OpenCV
-
-        Returns
-        -------
-        DMSResult
-        """
         # PERF: only copy the frame if we will actually draw on it
         annotated = frame.copy() if self.draw_overlays else frame
         result = DMSResult(annotated_frame=annotated)
@@ -278,10 +215,7 @@ class DriverMonitor:
                     draw_head_pose_axes(result.annotated_frame, fl,
                                         "mediapipe", yaw, pitch, roll)
 
-        # ── Auto-calibration ──────────────────────────────────────────────────
-        # Runs silently for first 90 frames (~3 s) while face is detected.
-        # Sit normally (eyes open, mouth closed) during this period.
-        #
+    
         # BUG 2 FIX — EAR: use top-75% of samples to exclude blink frames.
         #   A normal blink lasts 5-12 frames and gives EAR ~0.10-0.18.
         #   Sorting and taking the upper 75% removes these low outliers so the
@@ -302,9 +236,6 @@ class DriverMonitor:
                 # Discard bottom 25% (blink frames) and average the rest
                 open_eye_samples = sorted_ear[len(sorted_ear) // 4:]
                 self._ear_baseline = sum(open_eye_samples) / len(open_eye_samples)
-                # threshold = baseline - 0.08
-                # Normal blink: <400 ms (<12 fr) — won't sustain past ear_consec
-                # Drowsy closure: >500 ms (>15 fr) — will trigger
                 self.ear_thresh = max(0.15, self._ear_baseline - 0.08)
                 logger.info(
                     f"[DMS] EAR calibrated — "
@@ -336,9 +267,6 @@ class DriverMonitor:
 
         # ── Update frame counters ─────────────────────────────────────────────
         if face_found:
-            # EAR counter — only count eye closure when head is roughly forward.
-            # Head rotation naturally compresses the 2-D EAR projection; that
-            # is NOT real drowsiness and should not count.
             head_facing_forward = abs(yaw) < 25 and abs(pitch) < 18
 
             if ear < self.ear_thresh and head_facing_forward:
