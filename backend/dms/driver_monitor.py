@@ -349,15 +349,6 @@ class DriverMonitor:
     def _classify_risk(
         self, ear, mar, yaw, pitch, ecf, yf, hcf
     ) -> Tuple[str, str, str]:
-        """
-        Map current counters to (risk_level, driver_state, info_string).
-
-        Parameters
-        ----------
-        ecf : eye_closed_frames counter
-        yf  : yawn_frames counter
-        hcf : head_frames counter  (BUG 1 fix — replaces inline yaw/pitch check)
-        """
         # Priority 1 — DROWSY (eye closure sustained >= ear_consec frames)
         if ecf >= self.ear_consec:
             return "high", "DROWSY", f"Eye closure {ecf} fr"
