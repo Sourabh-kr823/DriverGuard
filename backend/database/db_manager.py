@@ -9,20 +9,6 @@ driver_events   — drowsiness / distraction alerts with risk level
 road_events     — road damage detections with geo-tag and severity
 system_log      — boot/shutdown and system health entries
 
-Usage
------
-    db = DatabaseManager(cfg["database"])
-    db.start()
-
-    db.log_driver_event(ear=0.18, mar=0.42, yaw=12, pitch=5,
-                        risk="high", state="DROWSY",
-                        lat=12.9716, lon=77.5946)
-
-    db.log_road_event(class_name="pothole", confidence=0.87,
-                      severity="moderate", area_px2=4500,
-                      lat=12.9716, lon=77.5946)
-
-    rows = db.query_recent_driver_events(limit=20)
 """
 
 import sqlite3
@@ -37,14 +23,6 @@ from loguru import logger
 # ─── DatabaseManager ──────────────────────────────────────────────────────────
 
 class DatabaseManager:
-    """
-    Thread-safe SQLite wrapper.
-
-    All writes are queued in a deque and flushed by a background
-    thread every `flush_interval_sec` seconds to avoid I/O blocking
-    the camera pipeline.
-    """
-
     _CREATE_DRIVER = """
     CREATE TABLE IF NOT EXISTS driver_events (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
