@@ -1,31 +1,8 @@
-"""
-backend/dms/head_pose.py
-────────────────────────
-Head pose estimation (Yaw, Pitch, Roll) using solvePnP.
 
-Uses 6 canonical 3-D face model points (nose tip, chin, eye corners,
-mouth corners) that correspond to dlib landmark indices.  The same
-mapping is used whether landmarks come from dlib or MediaPipe.
-
-Algorithm
----------
-1. Extract 2-D image points from detected landmarks.
-2. Solve the perspective-n-point (PnP) problem with cv2.solvePnP.
-3. Convert the rotation vector → Euler angles (Yaw, Pitch, Roll).
-
-References
-----------
-- Gudi et al. (2015) – Real-time estimation of head pose
-- OpenCV solvePnP docs
-"""
 
 import cv2
 import numpy as np
 
-
-# ─── Canonical 3-D face model (metres, face-centred coords) ──────────────────
-# Points: nose-tip, chin, left-eye-corner, right-eye-corner,
-#         left-mouth-corner, right-mouth-corner
 MODEL_POINTS_3D = np.array([
     (0.0,    0.0,     0.0),    # Nose tip
     (0.0,   -330.0, -65.0),    # Chin
@@ -34,16 +11,11 @@ MODEL_POINTS_3D = np.array([
     (-150.0, -150.0, -125.0),  # Left mouth corner
     (150.0,  -150.0, -125.0),  # Right mouth corner
 ], dtype=np.float64)
-
-# Corresponding dlib 68-point indices
 DLIB_INDICES = [30, 8, 36, 45, 48, 54]
-
-# Corresponding MediaPipe 468-point indices
 MP_INDICES   = [1, 152, 226, 446, 57, 287]
 
 
 def _build_camera_matrix(img_h: int, img_w: int) -> np.ndarray:
-    """Estimate camera intrinsics assuming no distortion."""
     focal = img_w
     cx, cy = img_w / 2, img_h / 2
     return np.array([
@@ -54,14 +26,6 @@ def _build_camera_matrix(img_h: int, img_w: int) -> np.ndarray:
 
 
 def _rotation_vec_to_euler(rvec: np.ndarray):
-    """
-    Convert OpenCV rotation vector → (yaw, pitch, roll) in degrees.
-
-    Convention:
-        yaw   > 0  → face turned right
-        pitch > 0  → face tilted up
-        roll  > 0  → face rolled counter-clockwise
-    """
     rmat, _ = cv2.Rodrigues(rvec)
     # Decompose with QR-like approach
     sy = np.sqrt(rmat[0, 0] ** 2 + rmat[1, 0] ** 2)
@@ -80,14 +44,6 @@ def _rotation_vec_to_euler(rvec: np.ndarray):
 # ─── Public API ──────────────────────────────────────────────────────────────
 
 def estimate_head_pose_dlib(landmarks, img_h: int, img_w: int):
-    """
-    Compute head pose from dlib 68-point landmarks.
-
-    Returns
-    -------
-    tuple[float, float, float]  (yaw, pitch, roll) in degrees
-                                 or (0, 0, 0) on failure.
-    """
     image_pts = np.array([
         (landmarks.part(i).x, landmarks.part(i).y)
         for i in DLIB_INDICES
@@ -107,13 +63,6 @@ def estimate_head_pose_dlib(landmarks, img_h: int, img_w: int):
 
 
 def estimate_head_pose_mediapipe(face_landmarks, img_h: int, img_w: int):
-    """
-    Compute head pose from MediaPipe 468-point NormalizedLandmarkList.
-
-    Returns
-    -------
-    tuple[float, float, float]  (yaw, pitch, roll) in degrees
-    """
     image_pts = np.array([
         (face_landmarks.landmark[i].x * img_w,
          face_landmarks.landmark[i].y * img_h)
@@ -135,9 +84,6 @@ def estimate_head_pose_mediapipe(face_landmarks, img_h: int, img_w: int):
 
 def draw_head_pose_axes(frame: np.ndarray, landmarks, backend: str,
                         yaw: float, pitch: float, roll: float) -> np.ndarray:
-    """
-    Overlay small 3-D axes on the frame to visualise head orientation.
-    """
     h, w = frame.shape[:2]
     if backend == "dlib":
         nose = (landmarks.part(30).x, landmarks.part(30).y)
