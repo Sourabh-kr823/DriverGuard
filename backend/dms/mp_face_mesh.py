@@ -26,7 +26,7 @@ class TasksFaceMesh:
         self._landmarker = vision.FaceLandmarker.create_from_options(options)
         self._last_ts_ms = -1
 
-    def process(self, rgb):a
+    def process(self, rgb):
         ts_ms = max(int(time.monotonic() * 1000), self._last_ts_ms + 1)
         self._last_ts_ms = ts_ms
 
