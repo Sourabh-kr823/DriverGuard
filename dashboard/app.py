@@ -227,7 +227,7 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
 
   <!-- Road Damage Panel with counters -->
   <div class="panel">
-    <div class="ph"><span>Road Damage</span><span>YOLOv8-nano · RDD2022</span></div>
+    <div class="ph"><span>Road Damage</span><span>YOLO11-nano · Pothole</span></div>
     <div class="det-list" id="det-list">
       <div style="color:var(--text2);font-size:10px;padding:6px;font-style:italic">No detections</div>
     </div>
@@ -236,10 +236,10 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
         <div class="mc"><div class="ml">Potholes</div>
           <div class="mv" id="cnt-pothole" style="color:var(--red)">0</div></div>
-        <div class="mc"><div class="ml">Cracks</div>
-          <div class="mv" id="cnt-crack" style="color:var(--amber)">0</div></div>
-        <div class="mc"><div class="ml">Rutting</div>
-          <div class="mv" id="cnt-rutting" style="color:var(--blue)">0</div></div>
+        <div class="mc"><div class="ml">Severe</div>
+          <div class="mv" id="cnt-severe" style="color:var(--amber)">0</div></div>
+        <div class="mc"><div class="ml">Moderate</div>
+          <div class="mv" id="cnt-moderate" style="color:var(--blue)">0</div></div>
       </div>
     </div>
   </div>
@@ -476,8 +476,8 @@ function refreshStats() {
     $("stat-avg-ear").textContent = d.avg_ear.toFixed(2);
     $("stat-road").textContent    = d.road_total;
     $("cnt-pothole").textContent  = d.pothole;
-    $("cnt-crack").textContent    = d.crack;
-    $("cnt-rutting").textContent  = d.rutting;
+    $("cnt-severe").textContent   = d.severe_road;
+    $("cnt-moderate").textContent = d.moderate_road;
     stateChart.data.datasets[0].data = [d.alert_count, d.drowsy_count, d.distracted_count, d.fatigued_count];
     stateChart.update("none");
   }).catch(() => {});
@@ -780,8 +780,8 @@ window.refreshStats = () => {
     $("stat-avg-ear").textContent = (d.avg_ear || 0).toFixed(2);
     $("stat-road").textContent    = d.road_total;
     $("cnt-pothole").textContent  = d.pothole;
-    $("cnt-crack").textContent    = d.crack;
-    $("cnt-rutting").textContent  = d.rutting;
+    $("cnt-severe").textContent   = d.severe_road;
+    $("cnt-moderate").textContent = d.moderate_road;
     stateChart.data.datasets[0].data = [d.alert_count, d.drowsy_count, d.distracted_count, d.fatigued_count];
     stateChart.update("none");
     updateScorecard(d);
@@ -943,11 +943,14 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         crack    = sum(1 for r in road_rows if "crack"    in (r.get("class_name") or ""))
         rutting  = sum(1 for r in road_rows if "rutting"  in (r.get("class_name") or ""))
         repair   = sum(1 for r in road_rows if "repair"   in (r.get("class_name") or ""))
+        severe_road   = sum(1 for r in road_rows if r.get("severity") == "severe")
+        moderate_road = sum(1 for r in road_rows if r.get("severity") == "moderate")
         return jsonify({"total_driver":total,"high_count":high,"moderate_count":moderate,
             "avg_ear":avg_ear,"alert_count":alert_c,"drowsy_count":drowsy_c,
             "distracted_count":distracted_c,"fatigued_count":fatigued_c,
             "road_total":road_total,"pothole":pothole,"crack":crack,
-            "rutting":rutting,"repair":repair})
+            "rutting":rutting,"repair":repair,
+            "severe_road":severe_road,"moderate_road":moderate_road})
 
     # ── Mute / unmute voice alerts ────────────────────────────────────────
     @app.route("/api/mute", methods=["POST"])
