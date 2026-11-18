@@ -1,23 +1,3 @@
-"""
-─────────────────────────
-Road hazard detection using YOLO11-nano (pothole_yolo11n, NCNN @ 416).
-
-Classes detected (1 class — matches models/pothole_yolo11n.pt)
-----------------
-    0 → pothole
-
-Class names come from road.classes in config.yaml and are then synced with
-the names embedded in the loaded model, so swapping models needs no code edit.
-
-Per-class confidence thresholds (runtime deployment only):
-    pothole 0.35  (unknown classes fall back to confidence_threshold)
-    (For paper mAP50 benchmarks, use a uniform threshold instead)
-
-Severity is determined by bounding-box area and confidence score:
-    Minor    < 3 000 px²  or conf < 0.70
-    Moderate < 10 000 px²
-    Severe   ≥ 10 000 px²
-"""
 
 from __future__ import annotations
 
@@ -51,13 +31,6 @@ class Detection:
 # ─── RoadDamageDetector ───────────────────────────────────────────────────────
 
 class RoadDamageDetector:
-    """
-    YOLO11-nano inference wrapper with severity classification.
-    
-    """
-
-    # Defaults for models/pothole_yolo11n — overridden by road.classes in
-    # config.yaml and then by the names embedded in the loaded model.
     CLASS_NAMES = {
         0: "pothole",
     }
@@ -81,8 +54,7 @@ class RoadDamageDetector:
             self.CLASS_NAMES = {int(k): str(v) for k, v in cfg["classes"].items()}
         self.conf_thr   = cfg.get("confidence_threshold", 0.50)
         self.iou_thr    = cfg.get("iou_threshold", 0.35)   # tighter NMS — fewer duplicate boxes
-        self.imgsz      = int(cfg.get("imgsz", 320))       # must match the NCNN export size
-        # Runtime per-class filtering toggle (default on)
+        self.imgsz      = int(cfg.get("imgsz", 320))
         self.use_per_class = cfg.get("per_class_thresholds", True)
         self._base_conf = min(self.PER_CLASS_CONF.values()) if self.use_per_class else self.conf_thr
 
@@ -114,8 +86,6 @@ class RoadDamageDetector:
         logger.info(f"[Road] Loading YOLO model: {self.model_path}")
         try:
             from ultralytics import YOLO
-            # NCNN model (an "_ncnn_model" folder) runs CPU-only, ARM-optimised —
-            # used on the Pi. A .pt model uses the GPU when one is available.
             is_ncnn = (str(self.model_path).rstrip("/").endswith("_ncnn_model")
                        or Path(self.model_path).is_dir())
             if is_ncnn:
@@ -209,9 +179,6 @@ class RoadDamageDetector:
     # ── Temporal confirmation ───────────────────────────────────────────────────
 
     def _apply_temporal(self, detections: List[Detection]) -> List[Detection]:
-        """
-        Keep only hazards confirmed across multiple frames.
-        """
         if not self.temporal_enabled:
             return detections
 
@@ -239,7 +206,6 @@ class RoadDamageDetector:
 
     def annotate(self, frame: np.ndarray,
                  detections: List[Detection]) -> np.ndarray:
-        """Draw bounding boxes and labels on a copy of the frame."""
         out = frame.copy()
         for d in detections:
             x1, y1, x2, y2 = d.bbox
@@ -251,7 +217,7 @@ class RoadDamageDetector:
             cv2.putText(out, label, (x1 + 2, y1 - 4),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
         return out
-
+    
     @property
     def latest(self) -> List[Detection]:
         with self._lock:
