@@ -1,20 +1,5 @@
 """
 
-What this script does
-─────────────────────
-1. Checks for LabelImg / Label Studio installation
-2. Prepares a pre-configured LabelImg workspace with the correct
-   class list (pothole, crack, rutting) and YOLO output mode
-3. Merges completed YOLO annotations into data/road_dataset/
-
-Recommended tool: LabelImg (fast, offline, YOLO-native)
-    pip install labelImg
-    labelImg
-
-Alternative: Label Studio (web UI, team annotation)
-    pip install label-studio
-    label-studio start
-
 Usage
 ─────
     # Step 1 — prepare workspace
@@ -114,8 +99,6 @@ def merge(workspace: Path, out_root: Path, val_split: float, seed: int):
     if not labels:
         print(f"✗ No label files found in {label_dir}")
         sys.exit(1)
-
-    # Only keep labels that have at least one annotation
     valid_pairs = []
     for lbl in labels:
         content = lbl.read_text().strip()
