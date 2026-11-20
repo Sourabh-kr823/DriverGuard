@@ -1,31 +1,3 @@
-"""
-
-────────────────────────────────
-Predictive Road Hazard Alert System
-
-Layer 1 — Local History (offline, no internet needed)
-    Queries past road_events from SQLite. When the vehicle approaches
-    within ALERT_RADIUS_METRES of a previously detected hazard that is
-    roughly ahead, emits a dashboard alert: "POTHOLE — 54m ahead".
-
-Layer 2 — OpenStreetMap Road Surface (internet needed, gracefully skipped)
-    Queries Overpass API for road surface tags (bad/unpaved/dirt) within
-    LOOK_AHEAD_METRES ahead of current position. Warns driver about rough
-    road surface on roads they've never driven.
-
-Usage
------
-    from backend.road.proximity_alert import ProximityAlertManager
-
-    prox = ProximityAlertManager(db_manager, cfg=cfg)
-    prox.start()
-
-    # in your main loop:
-    prox.update_gps(gps_fix)
-
-    # read latest alert:
-    alert = prox.latest_alert   # None or dict
-"""
 
 import math
 import threading
@@ -143,15 +115,6 @@ def _query_osm_road_surface(lat: float, lon: float, radius_m: int = OSM_RADIUS_M
 # ── Main class ────────────────────────────────────────────────────────────────
 
 class ProximityAlertManager:
-    """
-    Runs a background thread that checks proximity to known hazards
-    and optionally queries OpenStreetMap for road surface conditions.
-
-    Parameters
-    ----------
-    db_manager : DatabaseManager   — to query past road_events
-    cfg        : dict              — full config dict (reads proximity section)
-    """
 
     def __init__(self, db_manager, cfg: dict = None, voice_alert=None):
         self._db          = db_manager
@@ -189,7 +152,6 @@ class ProximityAlertManager:
     # ── GPS feed ───────────────────────────────────────────────────────────
 
     def update_gps(self, gps_fix):
-        """Call this every time you get a new GPS fix (from your main loop)."""
         with self._lock:
             self._current_gps = gps_fix
 
