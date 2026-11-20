@@ -61,11 +61,7 @@ class RoadDamageDetector:
         severity_cfg          = cfg.get("severity", {})
         self._minor_area_max  = severity_cfg.get("minor",    {}).get("area_px2_max", 3000)
         self._mod_area_max    = severity_cfg.get("moderate", {}).get("area_px2_max", 10000)
-
-        # ── Temporal confirmation ──────────────────────────────────────────────
-        # Require a hazard class to appear in `confirm_frames` of the last
-        # `confirm_window` frames before it is treated as real. Filters out
-        # single-frame false positives (shadows, tar seams, wet patches).
+        
         self.temporal_enabled = cfg.get("temporal_confirmation", True)
         self.confirm_window   = max(1, int(cfg.get("confirm_window", 5)))
         self.confirm_frames   = max(1, int(cfg.get("confirm_frames", 3)))
