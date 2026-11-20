@@ -1,9 +1,3 @@
-"""
-dashboard/app.py
-─────────────────
-Flask + Socket.IO live dashboard — enhanced v2.
-"""
-
 import csv
 import io
 import os
@@ -113,18 +107,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
 .ah-high{background:var(--red-l);color:var(--red);border-color:#fca5a5}
 .ah-moderate{background:var(--amber-l);color:var(--amber);border-color:#fcd34d}
 
-/* ── Dark / Light theme toggle ── */
 .theme-btn{background:none;border:1px solid var(--border);border-radius:20px;
   padding:3px 10px;cursor:pointer;font-size:13px;color:var(--text2);
   margin-left:6px;transition:all .2s}
 .theme-btn:hover{background:var(--bg3)}
-/* Toast notification */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--teal);color:#fff;
   font-family:var(--font-mono);font-size:10px;padding:8px 16px;border-radius:20px;
   opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;z-index:999}
 .toast.show{opacity:1;transform:translateY(0)}
 
-/* Dark theme overrides */
 body.dark{
   --bg:#0f172a;--bg2:#1e293b;--bg3:#1e2d3d;--border:#334155;
   --text:#e2e8f0;--text2:#94a3b8;
@@ -196,7 +187,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
 <div class="lowvis-strip" id="lowvis-strip"></div>
 
 <div class="main">
-  <!-- DMS Panel with circular gauge -->
   <div class="panel">
     <div class="ph"><span>Driver Monitoring</span><span>MediaPipe · Auto-Cal</span></div>
     <div class="mc-grid">
@@ -211,7 +201,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
       <div class="rb r-low" id="risk-badge">LOW</div>
       <span id="d-state" style="font-family:var(--font-mono);font-size:11px;color:var(--teal);font-weight:700">ALERT</span>
     </div>
-    <!-- Circular gauge -->
     <div style="display:flex;justify-content:center;padding:4px 0 8px">
       <svg viewBox="0 0 130 78" width="150" height="90">
         <path d="M 13,65 A 52,52 0 0,1 117,65" fill="none" stroke="#e2e8f0" stroke-width="13" stroke-linecap="round"/>
@@ -225,7 +214,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
     </div>
   </div>
 
-  <!-- Road Damage Panel with counters -->
   <div class="panel">
     <div class="ph"><span>Road Damage</span><span>YOLO11-nano · Pothole</span></div>
     <div class="det-list" id="det-list">
@@ -244,7 +232,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
     </div>
   </div>
 
-  <!-- GPS Panel -->
   <div class="panel">
     <div class="ph"><span>GPS — NEO-7M</span></div>
     <div class="gps-row">
@@ -259,7 +246,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   </div>
 </div>
 
-<!-- Driver scorecard + FPS -->
 <div style="display:grid;grid-template-columns:1fr 3fr;gap:10px;padding:0 10px 10px">
   <div class="scorecard-box">
     <div class="score-val" id="score-val" style="color:#059669">—</div>
@@ -285,7 +271,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   </div>
 </div>
 
-<!-- Session statistics -->
 <div class="stat-grid">
   <div class="stat-box">
     <div class="stat-val" id="stat-total">—</div>
@@ -305,7 +290,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   </div>
 </div>
 
-<!-- Alert history + State chart -->
 <div class="two-col">
   <div class="sw" style="margin:0">
     <div class="st"><span>Recent Alerts — HIGH &amp; MODERATE</span></div>
@@ -321,7 +305,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   </div>
 </div>
 
-<!-- EAR Trend Chart -->
 <div class="sw">
   <div class="st">
     <span>EAR TREND — last 60 events</span>
@@ -334,7 +317,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   <canvas id="ear-chart" height="70"></canvas>
 </div>
 
-<!-- Road Hazard Map -->
 <div class="sw">
   <div class="st">
     <span>ROAD HAZARD MAP — click pins for details</span>
@@ -351,7 +333,6 @@ body.dark .prox-strip{background:#1c0a00;border-color:#f97316}
   </div>
 </div>
 
-<!-- Driver Events Table -->
 <div class="sw" style="overflow-x:auto">
   <div class="st"><span>RECENT DRIVER EVENTS</span></div>
   <div id="evt-table"></div>
@@ -403,7 +384,6 @@ socket.on("vsm_update", data => {
   updateGauge(data.risk_score || 0, data.risk_level);
   $("alert-strip").className = "alert-strip" + (data.risk_level === "high" ? " show" : "");
 
-  // Low-visibility banner — shows when the cabin is too dark for reliable monitoring
   const lv = $("lowvis-strip");
   if (data.visibility === "low_light") {
     lv.textContent = data.driver_state === "LOW VISIBILITY"
@@ -453,7 +433,6 @@ function recalibrateDriver() {
   fetch("/api/recalibrate", { method: "POST" })
     .then(r => r.json())
     .then(d => {
-      // Show progress then restore button after ~4s (calibration takes ~3s)
       setTimeout(() => {
         btn.textContent = "NEW DRIVER";
         btn.style.color = "var(--green)";
@@ -592,12 +571,11 @@ function refreshTable() {
 refreshTable();
 setInterval(refreshTable, 10000);
 
-// ══ FEATURE 1: Session Timer + Fatigue Warning ══════════════════════════════
-const SESSION_START_MS = Date.now();           // Unix epoch milliseconds at page load
-const FATIGUE_LIMIT_MS = 2 * 60 * 60 * 1000;  // 7,200,000 ms = exactly 2 hours
+const SESSION_START_MS = Date.now();
+const FATIGUE_LIMIT_MS = 2 * 60 * 60 * 1000;
 
 setInterval(() => {
-  const elapsedMs = Date.now() - SESSION_START_MS;  // ms since page load
+  const elapsedMs = Date.now() - SESSION_START_MS;
   const hh = Math.floor(elapsedMs / 3600000);
   const mm = Math.floor((elapsedMs % 3600000) / 60000);
   const ss = Math.floor((elapsedMs % 60000) / 1000);
@@ -605,7 +583,6 @@ setInterval(() => {
   const badge = $("timer-badge");
   badge.textContent = `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
 
-  // Only warn after EXACTLY 2 hours (7,200,000 ms)
   if (elapsedMs >= FATIGUE_LIMIT_MS) {
     badge.classList.add("fatigue");
     $("fatigue-banner").style.display = "block";
@@ -617,7 +594,6 @@ setInterval(() => {
   }
 }, 1000);
 
-// ══ FEATURE 2: Driver Scorecard ═════════════════════════════════════════════
 function updateScorecard(stats) {
   let score = 100;
   score -= (stats.high_count     || 0) * 8;
@@ -640,7 +616,6 @@ function updateScorecard(stats) {
   $("score-grade").style.color = color;
 }
 
-// ══ FEATURE 3: Real-Time FPS + Latency ══════════════════════════════════════
 const _fpsHistory = [];
 const _riskHistory = [];
 const MAX_HISTORY  = 20;
@@ -664,7 +639,6 @@ function trackFPS() {
   _lastUpdateTs = now;
 }
 
-// Risk trend mini chart
 const riskChart = new Chart($("fps-chart"), {
   type: "line",
   data: { labels: [], datasets: [{
@@ -690,7 +664,6 @@ function updateRiskTrend(score) {
   riskChart.update("none");
 }
 
-// Hook into vsm_update for FPS + risk trend
 const _origVsmHandler = socket.listeners("vsm_update")[0];
 socket.off("vsm_update");
 socket.on("vsm_update", data => {
@@ -699,7 +672,6 @@ socket.on("vsm_update", data => {
   if (_origVsmHandler) _origVsmHandler(data);
 });
 
-// ══ FEATURE 4: Weather Widget ════════════════════════════════════════════════
 const WEATHER_ICONS = {
   "01":"☀️","02":"⛅","03":"☁️","04":"☁️",
   "09":"🌧","10":"🌦","11":"⛈","13":"❄️","50":"🌫"
@@ -715,15 +687,13 @@ function refreshWeather() {
     $("w-desc").textContent = d.desc || "";
     const rainEl = $("w-rain");
     rainEl.style.display = d.is_rain ? "inline" : "none";
-    // If rain, slightly yellow-tint the weather widget
     $("weather-widget").style.borderColor = d.is_rain ? "#fcd34d" : "var(--border)";
     $("weather-widget").style.background  = d.is_rain ? "#fef9c3" : "var(--bg3)";
   }).catch(() => {});
 }
 refreshWeather();
-setInterval(refreshWeather, 5 * 60 * 1000); // every 5 min
+setInterval(refreshWeather, 5 * 60 * 1000);
 
-// ══ FEATURE 5: Hazard Heatmap Toggle ════════════════════════════════════════
 let heatLayer = null;
 let heatMode  = false;
 
@@ -760,18 +730,14 @@ function buildHeatmap() {
   }).catch(() => {});
 }
 
-// Override refreshMap to respect heatmap mode
 const _origRefreshMap = refreshMap;
-// Redefine refreshMap
 window._periodicMapRefresh = () => {
   if (heatMode) buildHeatmap();
   else _origRefreshMap();
 };
-// Replace the periodic interval
 clearInterval(window._mapInterval);
 window._mapInterval = setInterval(window._periodicMapRefresh, 12000);
 
-// ══ Patch refreshStats to also update scorecard ═══════════════════════════
 const _origRefreshStats = refreshStats;
 window.refreshStats = () => {
   fetch("/api/session_stats").then(r => r.json()).then(d => {
@@ -789,14 +755,12 @@ window.refreshStats = () => {
 };
 
 
-// ══ FEATURE: Dark / Light Theme Toggle ══════════════════════════════════════
 function toggleTheme() {
   const isDark = document.body.classList.toggle("dark");
   $("theme-btn").textContent = isDark ? "☀️" : "🌙";
   try { localStorage.setItem("dg_theme", isDark ? "dark" : "light"); } catch(e){}
 }
 
-// Restore saved theme on load
 (function() {
   try {
     if (localStorage.getItem("dg_theme") === "dark") {
@@ -807,7 +771,6 @@ function toggleTheme() {
   } catch(e) {}
 })();
 
-// ══ FEATURE: Keyboard Shortcuts ══════════════════════════════════════════════
 function showToast(msg) {
   let toast = document.getElementById("kbd-toast");
   if (!toast) {
@@ -823,40 +786,33 @@ function showToast(msg) {
 }
 
 document.addEventListener("keydown", (e) => {
-  // Don't fire if user is typing in an input / textarea
   if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
 
   switch(e.key.toLowerCase()) {
     case "n":
-      // N → NEW DRIVER recalibrate
       recalibrateDriver();
       showToast("⌨ N — Recalibrating for new driver...");
       break;
     case "d":
-      // D → Toggle Dark/Light theme
       toggleTheme();
       const dark = document.body.classList.contains("dark");
       showToast(`⌨ D — Switched to ${dark ? "dark" : "light"} theme`);
       break;
     case "h":
-      // H → Toggle Heatmap
       toggleHeatmap();
       showToast("⌨ H — Heatmap toggled");
       break;
     case "m":
-      // M → Mute/unmute (future)
       toggleMute();
       break;
     case "?":
-      // ? → Show shortcuts
       showToast("N=New Driver  D=Theme  H=Heatmap");
       break;
   }
 });
 
 
-// ══ FEATURE: Alert Mute Toggle ══════════════════════════════════════════════
 let _isMuted = false;
 
 function toggleMute() {
@@ -880,12 +836,11 @@ function toggleMute() {
 def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
     app      = Flask(__name__)
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-    push_interval = 1.0 / 4   # 4 Hz — smooth enough, much lighter on Pi
+    push_interval = 1.0 / 4
     session_start_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     logger.info(f"[Dashboard] Session start: {session_start_iso}")
 
     def _filter_session(rows: list) -> list:
-        """Return only rows that belong to the current session."""
         return [r for r in rows if (r.get("ts_iso") or "") >= session_start_iso]
 
     @app.route("/")
@@ -910,7 +865,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
 
     @app.route("/api/recalibrate", methods=["POST"])
     def api_recalibrate():
-        """Reset DMS calibration for a new driver. Models stay loaded."""
         try:
             alert_manager.dms.recalibrate()
             logger.info("[Dashboard] Recalibration requested via dashboard")
@@ -952,7 +906,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
             "rutting":rutting,"repair":repair,
             "severe_road":severe_road,"moderate_road":moderate_road})
 
-    # ── Mute / unmute voice alerts ────────────────────────────────────────
     @app.route("/api/mute", methods=["POST"])
     def api_mute():
         from flask import request as _req
@@ -962,13 +915,11 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
             v = proximity_manager._voice
             if v is not None:
                 v._enabled = not muted
-        # Also mute via alert_manager voice reference
         if hasattr(alert_manager, "_voice") and alert_manager._voice is not None:
             alert_manager._voice._enabled = not muted
         logger.info(f"[Voice] {'Muted' if muted else 'Unmuted'} by dashboard")
         return jsonify({"muted": muted})
 
-    # ── Weather API (OpenWeatherMap, 5-min cache) ─────────────────────────
     _weather_cache = {"data": None, "ts": 0.0}
     WEATHER_KEY    = os.getenv("OPENWEATHER_API_KEY", "")
 
@@ -1005,20 +956,17 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
                 return jsonify(data)
         except Exception as e:
             logger.debug(f"[Weather] API error: {e}")
-        return jsonify(_weather_cache["data"])   # return stale if any
+        return jsonify(_weather_cache["data"])
 
     @app.route("/api/proximity")
     def api_proximity():
-        """Return the current proximity alert (if any)."""
         prox = getattr(api_proximity, "_manager", None)
         if prox is None:
             return jsonify(None)
         return jsonify(prox.latest_alert)
 
-    # ── PDF Session Report ────────────────────────────────────────────────────
     @app.route("/api/export/session_report")
     def api_export_session_report():
-        """Generate and return a formatted PDF session report."""
         import io
         from datetime import datetime
         from reportlab.lib.pagesizes import A4
@@ -1030,11 +978,9 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
                                          Spacer, Table, TableStyle, HRFlowable)
         from flask import send_file
 
-        # ── Gather session data ───────────────────────────────────────────────
         driver_rows = _filter_session(db_manager.query_recent_driver_events(500))
         road_rows   = _filter_session(db_manager.query_recent_road_events(500))
 
-        # Stats
         total_d    = len(driver_rows)
         high_c     = sum(1 for r in driver_rows if r.get("risk") == "high")
         moderate_c = sum(1 for r in driver_rows if r.get("risk") == "moderate")
@@ -1050,14 +996,12 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         repair_c   = sum(1 for r in road_rows if "repair"   in (r.get("class_name") or ""))
         severe_r   = sum(1 for r in road_rows if r.get("severity") == "severe")
 
-        # Driver score
         score = max(0, min(100, round(
             100 - high_c*8 - moderate_c*3 - drowsy_c*5 - dist_c*3)))
         grade_map = [(90,"A","Excellent"),(75,"B","Good"),
                      (60,"C","Average"),(40,"D","Poor"),(0,"F","Unsafe")]
         grade, label = next((g,l) for mn,g,l in grade_map if score >= mn)
 
-        # Session duration
         now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         try:
             s = datetime.fromisoformat(session_start_iso)
@@ -1068,7 +1012,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         except Exception:
             duration = "—"
 
-        # ── Build PDF ─────────────────────────────────────────────────────────
         buf = io.BytesIO()
         W, H = A4
         NAVY   = colors.HexColor("#1E3A5F")
@@ -1093,7 +1036,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
               topMargin=14*mm, bottomMargin=14*mm)
         story = []
 
-        # Header
         hdr = Table([[
             Paragraph("DriverGuard", S("h1",fontName="Helvetica-Bold",fontSize=22,textColor=WHITE)),
             Paragraph("Session Report<br/>"
@@ -1108,7 +1050,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         story.append(hdr)
         story.append(SP(5))
 
-        # Score bar
         score_col = GREEN if score>=75 else (ORANGE if score>=50 else RED)
         sc_tbl = Table([[
             Paragraph(f"<b>{score}</b>",
@@ -1128,7 +1069,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         story.append(sc_tbl)
         story.append(SP(5))
 
-        # ── Driver stats ──────────────────────────────────────────────────────
         def sec_banner(txt, col):
             t = Table([[Paragraph(txt,
                         S("bh",fontName="Helvetica-Bold",fontSize=10,textColor=WHITE))]],
@@ -1163,7 +1103,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         story.append(driver_tbl)
         story.append(SP(5))
 
-        # ── Road hazard stats ─────────────────────────────────────────────────
         story.append(sec_banner("Road Hazard Summary", ORANGE))
         story.append(SP(3))
 
@@ -1185,7 +1124,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
         story.append(road_tbl)
         story.append(SP(5))
 
-        # ── Road events log table ─────────────────────────────────────────────
         if road_rows:
             story.append(sec_banner("Road Events Log (GPS Tagged)", RED))
             story.append(SP(3))
@@ -1193,7 +1131,7 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
             def td(t, col=DGRAY): return Paragraph(str(t), S("td",fontName="Helvetica",fontSize=8,textColor=col,leading=11))
 
             re_data = [[th("Time"), th("Class"), th("Severity"), th("Conf"), th("Latitude"), th("Longitude")]]
-            for r in road_rows[:30]:   # max 30 rows
+            for r in road_rows[:30]:
                 sev = r.get("severity","—")
                 sev_col = RED if sev=="severe" else (ORANGE if sev=="moderate" else GREEN)
                 re_data.append([
@@ -1222,7 +1160,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
                     f"Showing 30 of {len(road_rows)} road events. Download Road CSV for full data.",
                     S("note",fontName="Helvetica-Oblique",fontSize=8,textColor=MGRAY)))
 
-        # ── HIGH alert log ────────────────────────────────────────────────────
         high_rows = [r for r in driver_rows if r.get("risk")=="high"][:20]
         if high_rows:
             story.append(SP(4))
@@ -1250,7 +1187,6 @@ def create_app(alert_manager, db_manager, cfg: dict, proximity_manager=None):
             ha_tbl.setStyle(TableStyle(ha_style))
             story.append(ha_tbl)
 
-        # ── Footer ────────────────────────────────────────────────────────────
         story.append(SP(6))
         story.append(HR(BORDER, 0.5))
         story.append(Paragraph(
