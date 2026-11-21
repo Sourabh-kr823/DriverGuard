@@ -1,40 +1,4 @@
-"""
-scripts/calibrate_camera.py
-────────────────────────────
-Camera calibration using a printed checkerboard pattern.
 
-Why calibrate?
-──────────────
-solvePnP (used in head_pose.py) relies on accurate camera intrinsics
-(focal length, principal point) and distortion coefficients.  Without
-calibration, head-pose yaw/pitch estimates can drift by 5–15°, making
-the ±30° / ±20° thresholds unreliable.
-
-Steps
-─────
-1. Print a checkerboard:
-   - US Letter or A4 paper
-   - Default: 9×6 inner corners (10×7 squares)
-   - Measure the actual square size in mm — update --square-mm
-
-2. Run this script with your DMS IR camera:
-       python scripts/calibrate_camera.py --source 0
-
-3. Hold the board at varying angles / distances.
-   Press SPACE to capture (need at least 15 good frames).
-   Press Q to finish and compute calibration.
-
-4. Calibration is saved to:
-       models/camera_dms_calib.npz  (for DMS camera)
-       models/camera_road_calib.npz (for road camera, pass --source 1)
-
-5. head_pose.py will auto-load the calibration if the file exists.
-
-Usage
-─────
-    python scripts/calibrate_camera.py --source 0 --name dms
-    python scripts/calibrate_camera.py --source 1 --name road --cols 9 --rows 6
-"""
 
 import argparse
 import time
@@ -46,11 +10,8 @@ import numpy as np
 
 def calibrate(source, name: str, cols: int, rows: int,
               square_mm: float, min_frames: int, out_dir: Path):
-    """Run interactive calibration session."""
 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-
-    # 3-D object points for one board position
     obj_pts_single = np.zeros((cols * rows, 3), np.float32)
     obj_pts_single[:, :2] = np.mgrid[0:cols, 0:rows].T.reshape(-1, 2)
     obj_pts_single *= square_mm
@@ -158,10 +119,6 @@ def calibrate(source, name: str, cols: int, rows: int,
 
 
 def load_calibration(name: str, models_dir: Path = Path("models")):
-    """
-    Load a previously saved calibration.
-    Returns (camera_matrix, dist_coeffs) or (None, None) if not found.
-    """
     path = models_dir / f"camera_{name}_calib.npz"
     if not path.exists():
         return None, None
