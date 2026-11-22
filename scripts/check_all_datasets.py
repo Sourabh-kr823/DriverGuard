@@ -1,15 +1,4 @@
-"""
-check_all_datasets.py
-──────────────────────
-Checks all 3 datasets thoroughly even without yaml files.
-Reads label files directly to find class IDs,
-checks README and COCO json for class names.
 
-Run this and share the full output.
-
-Usage:
-    python check_all_datasets.py
-"""
 
 import json
 import os
@@ -32,7 +21,6 @@ DATASETS = [
 
 
 def scan_class_ids(label_dir: Path, max_files=100):
-    """Read up to max_files label .txt files and collect all class IDs."""
     class_ids = set()
     files = list(label_dir.rglob("*.txt"))[:max_files]
     for f in files:
