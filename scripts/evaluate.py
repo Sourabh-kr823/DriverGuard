@@ -1,22 +1,4 @@
-"""
-DriverGuard evaluation — only measured, defensible results:
-  1. Road-model validation  — mAP50, mAP50-95, per-class AP50/precision/recall
-  2. Inference benchmark     — ms/frame + FPS (GPU+CPU for .pt, CPU for NCNN)
-  3. Test suite              — pytest pass/fail (correctness evidence)
 
-Run from the repo root:
-    python scripts/evaluate.py
-    python scripts/evaluate.py --no-val       # skip dataset validation
-    python scripts/evaluate.py --no-cpu       # skip the (slow) CPU benchmark (.pt only)
-    python scripts/evaluate.py --no-tests
-    python scripts/evaluate.py --device cpu
-
-Works with both the .pt model (GPU when available) and an exported NCNN model
-(a "_ncnn_model" folder, CPU-only). Writes evaluation_report.md and PNG charts
-when matplotlib is available. DMS drowsiness precision/recall needs labeled
-ground-truth video, which is not part of the logged data — this script does
-NOT fabricate a DMS accuracy figure.
-"""
 
 import argparse
 import statistics
