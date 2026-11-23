@@ -1,52 +1,4 @@
-"""
-scripts/convert_rdd2022.py
-───────────────────────────
-Convert RDD2022 dataset (Pascal VOC XML) → YOLO format (.txt).
 
-RDD2022 structure (after download)
-────────────────────────────────────
-RDD2022/
-  country/
-    India/
-      train/
-        images/   ← .jpg frames
-        annotations/xmls/  ← Pascal VOC .xml
-      test/
-        images/
-
-RDD2022 class names → VSM class IDs
-─────────────────────────────────────
-    D00 Longitudinal crack   → 1 (crack)
-    D10 Transverse crack     → 1 (crack)
-    D20 Alligator crack      → 1 (crack)
-    D40 Pothole              → 0 (pothole)
-    (all other classes       → skipped unless --keep-all)
-
-Output layout
-─────────────
-    data/road_dataset/
-      images/
-        train/   ← .jpg files (symlinked or copied)
-        val/     ← held-out split (default 15 %)
-      labels/
-        train/   ← .txt YOLO annotations
-        val/
-
-Usage
-─────
-    # Convert India split only
-    python scripts/convert_rdd2022.py \\
-        --rdd-root /path/to/RDD2022 \\
-        --out-root data/road_dataset \\
-        --countries India \\
-        --val-split 0.15
-
-    # All countries, keep all damage classes mapped to crack/pothole
-    python scripts/convert_rdd2022.py \\
-        --rdd-root /path/to/RDD2022 \\
-        --out-root data/road_dataset \\
-        --val-split 0.15
-"""
 
 import argparse
 import os
@@ -55,10 +7,6 @@ import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-
-# ─── Class mapping ────────────────────────────────────────────────────────────
-# RDD2022 label → VSM class id
-#   0 = pothole  1 = crack  (2 = rutting — not in RDD2022, add manually)
 
 RDD_TO_VSM = {
     "D00": 1,   # Longitudinal crack
@@ -77,13 +25,6 @@ ALL_COUNTRIES = ["India", "Japan", "Czech", "Norway", "United_States", "China"]
 # ─── XML parser ───────────────────────────────────────────────────────────────
 
 def parse_xml(xml_path: Path, img_w: int, img_h: int) -> list[str]:
-    """
-    Parse a Pascal VOC XML file and return YOLO-format annotation lines.
-
-    Each line: <class_id> <cx> <cy> <w> <h>   (all normalised 0–1)
-
-    Returns [] if no relevant objects are found.
-    """
     try:
         tree = ET.parse(xml_path)
     except ET.ParseError:
