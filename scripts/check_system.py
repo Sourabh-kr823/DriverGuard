@@ -4,9 +4,6 @@ check_system.py
 Pre-flight check for DriverGuard.
 Run before main.py to verify all components are working.
 
-Usage:
-    python check_system.py
-    python check_system.py --config config.yaml
 """
 
 import argparse
@@ -141,8 +138,6 @@ test_camera(road_src, "Road / forward-facing")
 section("4. MediaPipe Face Detection")
 
 try:
-    # Same wrapper the app uses (MediaPipe Tasks FaceLandmarker — mp.solutions
-    # was removed in mediapipe >= 0.10.30, the only builds for Pi / Py3.13).
     from backend.dms.mp_face_mesh import TasksFaceMesh, DEFAULT_MODEL_PATH
     task_path = cfg.get("dms", {}).get("mediapipe_model_path", DEFAULT_MODEL_PATH)
     if not os.path.exists(task_path):
