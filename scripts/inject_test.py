@@ -4,8 +4,6 @@ import yaml, time
 cfg = yaml.safe_load(open('config.yaml'))
 db = DatabaseManager(cfg['database'])
 db.start()
-
-# Inject at ALL simulation waypoints so GPS definitely hits one
 waypoints = [
     (12.9716, 77.5946),
     (12.9776, 77.6000),

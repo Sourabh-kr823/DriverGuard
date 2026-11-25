@@ -1,15 +1,4 @@
-"""
-Export a YOLO .pt model to NCNN format for fast ARM inference.
 
-Usage
-─────
-    python scripts/export_ncnn.py                # pothole_yolo11n.pt @ 416 (config.yaml road.imgsz)
-    python scripts/export_ncnn.py --imgsz 320    # export at 320x320
-
-Ultralytics requires the folder to end with _ncnn_model. The output is
-always named with its size so several exports can coexist:
-    models/pothole_yolo11n_416_ncnn_model
-"""
 
 import argparse
 import json
@@ -43,9 +32,6 @@ def main():
     model_path = args.model
     imgsz = args.imgsz
     stem = Path(model_path).stem
-
-    # Ultralytics names the output after the .pt stem, so export from a temp
-    # copy named <stem>_<size>.pt. This yields <stem>_<size>_ncnn_model.
     tmp_pt = Path(model_path).with_name(f"{stem}_{imgsz}.pt")
     shutil.copy2(model_path, tmp_pt)
     sized_path = tmp_pt.with_name(f"{tmp_pt.stem}_ncnn_model")
