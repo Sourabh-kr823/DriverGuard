@@ -329,9 +329,6 @@ EAR and MAR thresholds are set by the per-driver calibration at start-up; all va
 ## 👤 Author
 
 **Sourabh Kumar** — [@Sourabh-kr823](https://github.com/Sourabh-kr823)<br>
-Project lead · AI road-hazard pipeline: dataset curation, YOLO11 training and evaluation, NCNN edge deployment
-
-Developed as a final-year project in the Department of Computer Science and Engineering, SJB Institute of Technology, Bengaluru, under the guidance of Dr. Arun Kumar D R.
 
 ---
 
@@ -340,7 +337,7 @@ Developed as a final-year project in the Department of Computer Science and Engi
 ```
 Phase I   ✅ Complete → Laptop prototype, dual camera, live dashboard
 Phase II  ✅ Complete → Raspberry Pi 5 deployment, YOLO11 pothole model, GPS, buzzer, voice alerts
-Phase III 📋 Planned  → Road trials, labelled drowsiness evaluation, accelerator-based model
+Phase III 📋 In Progress  → Road trials, labelled drowsiness evaluation, accelerator-based model
 ```
 
 ---
@@ -348,4 +345,4 @@ Phase III 📋 Planned  → Road trials, labelled drowsiness evaluation, acceler
 ## 📄 License
 
 This project is developed as part of academic coursework.
-© 2026 DriverGuard contributors. All rights reserved.
+© 2026 DriverGuard. All rights reserved.
