@@ -326,16 +326,12 @@ EAR and MAR thresholds are set by the per-driver calibration at start-up; all va
 
 ---
 
-## 👥 Team
+## 👤 Author
 
-| Name | GitHub | Role |
-|------|--------|------|
-| Sourabh Kumar | [@Sourabh-kr823](https://github.com/Sourabh-kr823) | Project lead — AI road-hazard pipeline: dataset curation, YOLO11 training and evaluation, NCNN edge deployment |
-| Vaibhav Gupta | [@vaibhavgupta4621](https://github.com/vaibhavgupta4621) | Driver monitoring pipeline, EAR/MAR computation |
-| Saumya Raj | [@saumyaraj1925](https://github.com/saumyaraj1925) | Live web dashboard, frontend |
-| Sumit Kumar | [@sumitkumar93041](https://github.com/sumitkumar93041) | Backend and Risk Fusion Engine |
+**Sourabh Kumar** — [@Sourabh-kr823](https://github.com/Sourabh-kr823)<br>
+Project lead · AI road-hazard pipeline: dataset curation, YOLO11 training and evaluation, NCNN edge deployment
 
-**Guide:** Dr. Arun Kumar D R, Department of Computer Science and Engineering, SJB Institute of Technology, Bengaluru
+Developed as a final-year project in the Department of Computer Science and Engineering, SJB Institute of Technology, Bengaluru, under the guidance of Dr. Arun Kumar D R.
 
 ---
 
@@ -352,4 +348,4 @@ Phase III 📋 Planned  → Road trials, labelled drowsiness evaluation, acceler
 ## 📄 License
 
 This project is developed as part of academic coursework.
-© 2026 DriverGuard Team. All rights reserved.
+© 2026 DriverGuard contributors. All rights reserved.
