@@ -1,8 +1,6 @@
 """
 test_images.py
 ──────────────
-Run road damage detection on a folder of images or a single image.
-Use this to demo the model to your guide without a road test.
 
 Usage:
     python test_images.py --source path/to/image.jpg
@@ -10,10 +8,6 @@ Usage:
     python test_images.py --source 0          # webcam
     python test_images.py --source video.mp4  # video file
 
-Controls:
-    Q or ESC → quit
-    S        → save current frame
-    SPACE    → pause/resume (video only)
 """
 
 import argparse
@@ -48,7 +42,6 @@ TEXT_COLORS = {
 
 
 def draw_detections(frame, results):
-    """Draw bounding boxes with class name and confidence."""
     for r in results:
         for box in r.boxes:
             cls_id = int(box.cls[0])
@@ -69,7 +62,6 @@ def draw_detections(frame, results):
 
 
 def run_on_images(model, folder: Path, conf: float, imgsz: int):
-    """Run detection on all images in a folder — press any key to advance."""
     imgs = list(folder.glob("*.jpg")) + list(folder.glob("*.png")) + \
            list(folder.glob("*.jpeg"))
     if not imgs:
@@ -104,7 +96,6 @@ def run_on_images(model, folder: Path, conf: float, imgsz: int):
 
 
 def run_on_video(model, source, conf: float, imgsz: int):
-    """Run detection on video file or webcam."""
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(f"Cannot open: {source}")
