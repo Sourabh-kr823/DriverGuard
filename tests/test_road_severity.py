@@ -1,13 +1,4 @@
-"""
-tests/test_road_severity.py
-────────────────────────────
-Unit tests for RoadDamageDetector severity classification.
 
-These tests exercise only the _classify_severity() method — no
-YOLOv8 model or camera needed.
-
-Run:  pytest tests/test_road_severity.py -v
-"""
 
 import sys
 from pathlib import Path

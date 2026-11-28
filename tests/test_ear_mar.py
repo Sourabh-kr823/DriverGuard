@@ -1,13 +1,4 @@
-"""
-tests/test_ear_mar.py
-──────────────────────
-Unit tests for EAR and MAR computation.
 
-Tests verify the mathematical formulae directly using synthetic
-landmark arrays — no camera or model needed.
-
-Run:  pytest tests/test_ear_mar.py -v
-"""
 
 import numpy as np
 import pytest
@@ -22,8 +13,6 @@ from backend.dms.ear_mar import (
     compute_ear_mar,
 )
 
-
-# ─── EAR tests ────────────────────────────────────────────────────────────────
 
 class TestEAR:
     """Eye Aspect Ratio formula: (A + B) / (2 * C)"""

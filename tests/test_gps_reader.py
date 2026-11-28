@@ -1,10 +1,4 @@
-"""
-tests/test_gps_reader.py
-─────────────────────────
-Unit tests for GPSReader in simulation mode (no hardware needed).
 
-Run:  pytest tests/test_gps_reader.py -v
-"""
 
 import sys
 import time
@@ -39,7 +33,6 @@ class TestGPSSimulation:
 
     def test_coordinates_near_bengaluru(self, gps_sim):
         fix = gps_sim.latest
-        # Bengaluru bounds roughly: lat 12.8–13.1, lon 77.4–77.8
         assert 12.8 <= fix.lat <= 13.2, f"Lat {fix.lat} out of range"
         assert 77.3 <= fix.lon <= 77.9, f"Lon {fix.lon} out of range"
 
@@ -59,7 +52,6 @@ class TestGPSSimulation:
         assert fix1.lat != fix2.lat or fix1.lon != fix2.lon
 
     def test_latest_returns_copy(self, gps_sim):
-        """Mutating the returned fix must not affect internal state."""
         fix = gps_sim.latest
         original_lat = fix.lat
         fix.lat = 0.0

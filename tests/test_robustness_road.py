@@ -1,6 +1,4 @@
-"""
-Road-detector edge cases: temporal confirmation + graceful behaviour with no model.
-"""
+
 import numpy as np
 from backend.road.detector import RoadDamageDetector, Detection
 

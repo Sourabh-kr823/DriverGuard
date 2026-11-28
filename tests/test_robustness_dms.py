@@ -1,6 +1,4 @@
-"""
-DMS behaviour under low light and degraded frames (no models loaded -> no face).
-"""
+
 import numpy as np
 from backend.dms.driver_monitor import DriverMonitor
 CFG = {

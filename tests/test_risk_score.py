@@ -1,10 +1,4 @@
-"""
-tests/test_risk_score.py
-─────────────────────────
-Unit tests for the RiskScorer in utils/risk_score.py.
 
-Run:  pytest tests/test_risk_score.py -v
-"""
 
 import sys
 from pathlib import Path
