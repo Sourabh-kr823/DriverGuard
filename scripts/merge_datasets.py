@@ -1,22 +1,4 @@
-"""
-merge_datasets.py
-──────────────────────────────────────────────────────────────────
-Merges downloaded road damage datasets into existing
-D:/We4/train/ folder, remapping class IDs to match your
-5-class DriverGuard structure.
 
-Your target classes:
-    0: pothole
-    1: crack_longitudinal
-    2: crack_transverse
-    3: rutting
-    4: repair
-
-Usage
-─────
-    python merge_datasets.py --verify   # check mappings first
-    python merge_datasets.py            # run full merge
-"""
 
 import argparse
 import shutil
@@ -27,14 +9,9 @@ from pathlib import Path
 TRAIN_IMAGES = Path("D:/We4/train/images")
 TRAIN_LABELS = Path("D:/We4/train/labels")
 
-# ─── Dataset configurations ──────────────────────────────────────────────────
-# PATHS FIXED — pointing to where check_datasets.py extracted them
-# DATASET 3 FIXED — uses labels-YOLO/ instead of labels/ (confirmed from output)
 
 DATASET_CONFIGS = [
 
-    # ── Dataset 1: Indian Roads Dataset ──────────────────────────────────────
-    # Classes: pothole(0), speed_breaker(1), unpaved_road(2)
     {
         "name"      : "Indian Roads Dataset",
         "path"      : Path("D:/We4/datasets/indian_road/Dataset3Class"),  # FIXED PATH
@@ -43,26 +20,19 @@ DATASET_CONFIGS = [
                 1: 0,    # pothole → pothole ✓
                 2: -1,   # unpaved_road → skip
             },
-        "split"     : "",       # images at path/images/
+        "split"     : "",       
         "label_dir" : "",
     },
-
-    # ── Dataset 2: Potholes YOLOv8 Dataset ───────────────────────────────────
-    # Classes: pothole(0) only — nc=1 confirmed
     {
         "name"      : "Potholes YOLOv8 Dataset",
         "path"      : Path("D:/We4/datasets/yv8"),  # FIXED PATH
         "remap"     : {
             0: 0,    # pothole → pothole ✓
         },
-        "split"     : "train",  # images at path/train/images/
+        "split"     : "train",  
         "label_dir" : "labels",
     },
 
-    # ── Dataset 3: Potholes + Cracks + Manholes ───────────────────────────────
-    # Classes confirmed from COCO json:
-    #   ID 0 = pothole, ID 1 = crack, ID 2 = manhole
-    # Labels are in labels-YOLO/ (NOT labels/) — confirmed from output
     {
         "name"      : "Potholes+Cracks+Manholes",
         "path"      : Path("D:/We4/datasets/potholes_and_manhole"),  # FIXED PATH
@@ -71,8 +41,8 @@ DATASET_CONFIGS = [
             1: 1,    # crack   → crack_longitudinal ✓
             2: -1,   # manhole → skip
         },
-        "split"     : "data",        # images at path/data/images/
-        "label_dir" : "labels-YOLO", # FIXED — use labels-YOLO not labels
+        "split"     : "data",       
+        "label_dir" : "labels-YOLO",
     },
 ]
 
@@ -80,19 +50,15 @@ DATASET_CONFIGS = [
 # ─── Merge logic ─────────────────────────────────────────────────────────────
 
 def find_images_and_labels(dataset_path: Path, split: str, label_dir: str):
-    """Find image and label directories inside dataset folder."""
-
-    # Build base path
     base = dataset_path / split if split else dataset_path
 
     # Image directory
     img_dir = base / "images"
     if not img_dir.exists():
-        img_dir = base  # images directly in base (flat structure)
+        img_dir = base  
 
     # Label directory
     if label_dir == "":
-        # Flat structure — labels are in same folder as images
         lbl_dir = img_dir
     else:
         lbl_dir = base / label_dir
@@ -107,10 +73,6 @@ def find_images_and_labels(dataset_path: Path, split: str, label_dir: str):
 
 
 def remap_label_file(src_label: Path, remap: dict) -> list:
-    """
-    Read a YOLO label file and remap class IDs.
-    Returns remapped lines. Lines with class -1 are discarded.
-    """
     if not src_label.exists():
         return []
 
@@ -136,7 +98,6 @@ def remap_label_file(src_label: Path, remap: dict) -> list:
 
 
 def verify_dataset(config: dict):
-    """Print class ID distribution to confirm remapping is correct."""
     path      = config["path"]
     split     = config["split"]
     label_dir = config["label_dir"]
@@ -178,7 +139,6 @@ def verify_dataset(config: dict):
 
 
 def merge_dataset(config: dict, existing_images: set):
-    """Copy images + remapped labels to training folder."""
     name      = config["name"]
     path      = config["path"]
     remap     = config["remap"]
