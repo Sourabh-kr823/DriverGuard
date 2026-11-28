@@ -1,36 +1,4 @@
-"""
-scripts/train_road.py
-──────────────────────
-Fine-tune YOLOv8-nano on RDD2022 + custom Indian frames.
 
-Dataset preparation
-───────────────────
-1. Download RDD2022 from https://github.com/sekilab/RoadDamageDetector
-2. Place your 1 200 custom-annotated India frames in data/india/
-3. Run this script — it merges datasets, trains, and exports.
-
-Expected layout after preparation
-──────────────────────────────────
-data/
-  road_dataset/
-    images/
-      train/   ← RDD2022 + India frames
-      val/     ← held-out split
-    labels/
-      train/   ← YOLO format .txt files
-      val/
-
-Classes (aligned with config.yaml)
-────────────────────────────────────
-    0: pothole
-    1: crack
-    2: rutting
-
-Usage
-─────
-    python scripts/train_road.py
-    python scripts/train_road.py --epochs 100 --batch 16 --imgsz 640
-"""
 
 import argparse
 import shutil

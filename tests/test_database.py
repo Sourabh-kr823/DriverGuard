@@ -1,10 +1,4 @@
-"""
-tests/test_database.py
-───────────────────────
-Unit tests for DatabaseManager using a temporary SQLite file.
 
-Run:  pytest tests/test_database.py -v
-"""
 
 import sys
 import time
